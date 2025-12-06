@@ -33,7 +33,10 @@ PAST_TWEETS = "（学習データ省略）"
 CHARACTER_SETTING = "あなたはAIまうです。"
 
 genai.configure(api_key=GEMINI_API_KEY)
-model = genai.GenerativeModel('gemini-1.5-flash', system_instruction=CHARACTER_SETTING)
+model = genai.GenerativeModel(
+    model_name='gemini-1.5-flash-latest',
+    system_instruction=CHARACTER_SETTING
+)
 
 intents = discord.Intents.default()
 intents.message_content = True # ここが重要
