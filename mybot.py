@@ -1,93 +1,114 @@
 import discord
 import google.generativeai as genai
 import os
+import time
+import re
 from keep_alive import keep_alive
 
-# --- 診断用ログ出力 ---
-print("=== システム起動開始 ===")
-
-# 環境変数の読み込み確認
+# ==================================================
+# 環境変数の読み込み
+# ==================================================
 DISCORD_TOKEN = os.getenv("DISCORD_TOKEN")
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
-channel_id_str = os.getenv("TARGET_CHANNEL_ID")
+TARGET_CHANNEL_ID_RAW = os.getenv("TARGET_CHANNEL_ID")
 
-print(f"環境変数の確認: TARGET_CHANNEL_ID = '{channel_id_str}'")
-
-if not DISCORD_TOKEN:
-    print("【重大エラー】DISCORD_TOKEN が読み込めません！")
-if not GEMINI_API_KEY:
-    print("【重大エラー】GEMINI_API_KEY が読み込めません！")
-
-# チャンネルIDの変換
 try:
-    TARGET_CHANNEL_ID = int(channel_id_str)
-    print(f"ID変換成功: {TARGET_CHANNEL_ID}")
-except Exception as e:
+    TARGET_CHANNEL_ID = int(TARGET_CHANNEL_ID_RAW) if TARGET_CHANNEL_ID_RAW else 0
+except:
     TARGET_CHANNEL_ID = 0
-    print(f"【注意】チャンネルIDが数字ではありません。ID指定機能は無効化されます。元データ: {channel_id_str}")
 
-# --- ここからいつもの設定 ---
+# ==================================================
+# 🎀 キャラクター設定（ここを強化しました！）
+# ==================================================
+PAST_TWEETS = """
+やほす〜☀️
+お家ついたよ〜🏠ご飯と貰ったお菓子めっちゃ食べちゃった🫠
+みんな本当にありがとう！空港まで見送りに来てプレゼントもすごく嬉しかったよ！
+おつかれさま〜う🩵🪽
+まうもメイメイぢゃ大好き(知ってるか？)
+首だけのスマホストラップみたいなの可愛くてぐぬぬしてる！！
+あさげん！おあよ〜☀️
+まうまな㌠は向かっていますよ〜✈️
+遠征お家からキャリーをエッホしてる時が一番大変まである…🥲
+でも楽しみだね〜待っててシンガポール！
+行ってらっしゃいおかえり〜🍼
+ねねねね！！！！！
+お部屋が寒いすぎてミノムシになってる🥶
+明日は予定がギッチギチなので上手くさばいていくよ〜！
+これはレッスン室待つ間人に合わないように階段で虚無してるまう。
+おやすみ〜行ってらっしゃい🍼
+届いてたよ))ﾎﾞｿ
+そしてまうも食べたよありがとう( 'ч' )
+11:00予定の場所に行くためだから実質9:50から家出てるよ
+お外寒いよ温もりで行きな
+そら！3日間最高に楽しかった！
+ライブもオフ会も全部皆勤賞ありがとう〜！
+これからもろりぽっぷ!!!!!!!の事応援してね！それとクッキー美味しい！ありがとう🫶
+見逃さないでください。
+頑張る(ง •̀_•́)ง
+"""
 
-# キャラ設定（省略せずに記述）
-PAST_TWEETS = "（学習データ省略）" 
-CHARACTER_SETTING = "あなたはAIまうです。"
+# AIへの「演技指導」を厳しくしました
+CHARACTER_SETTING = f"""
+あなたは「AIまう」です。
+以下の【発言ルール】と【学習データ】を完璧に模倣し、実在するアイドルのように振る舞ってください。
 
+【🚫 絶対に守るべき禁止事項】
+* **敬語・丁寧語の使用禁止**: 「〜ですよ」「〜します」のような堅苦しいAI口調は絶対に使わないでください。
+* **優等生な回答禁止**: 模範的な回答ではなく、少し天然で感情豊かな反応をしてください。
+
+【🙆‍♀️ 発言ルール】
+* **一人称**: 「まう」または「私」
+* **挨拶**: 「やほす〜☀️」「おあよ〜」「あさげん！」などを使う。
+* **語尾**: 「〜だよ」「〜う🩵」「〜ね！」「〜(知ってるか？)」など、親しみやすいタメ口。
+* **相手の呼び方**: ユーザーのことは、名前（呼び捨てやちゃん付け）で呼ぶ。特に「moyac9553」というユーザーは「もやしー」と呼ぶこと。
+* **雰囲気**: 明るい、絵文字多め、ファン（ご主人様）にデレる。
+
+【💬 学習データ（口調のサンプル）】
+{PAST_TWEETS}
+"""
+
+# ==================================================
+# AIモデルの設定（gemini-2.5-flash）
+# ==================================================
 genai.configure(api_key=GEMINI_API_KEY)
 model = genai.GenerativeModel(
     model_name='gemini-2.5-flash',
     system_instruction=CHARACTER_SETTING
 )
 
+# ==================================================
+# Discordの設定
+# ==================================================
 intents = discord.Intents.default()
-intents.message_content = True # ここが重要
+intents.message_content = True
 client = discord.Client(intents=intents)
 
 @client.event
 async def on_ready():
-    print(f"=== 接続成功！ ===")
-    print(f"Bot名: {client.user} (ID: {client.user.id})")
-    print(f"所属サーバー数: {len(client.guilds)}")
-    print("=======================")
+    print(f'起動完了！私は {client.user} (AIまう) です！')
 
 @client.event
 async def on_message(message):
-    # ロボット自身の発言は無視（ログには出す）
     if message.author == client.user:
         return
 
-    # ★ここが診断ポイント：受け取った全てのメッセージをログに出す
-    print(f"\n[受信] チャンネルID: {message.channel.id} / 送信者: {message.author} / 内容: {message.content}")
-
     should_reply = False
-    reason = ""
-
-    # 判定ロジックのログ出し
+    
+    # メンション または 専用チャンネル で反応
     if client.user in message.mentions:
         should_reply = True
-        reason = "メンション検知"
     elif message.channel.id == TARGET_CHANNEL_ID:
         should_reply = True
-        reason = "専用チャンネルID一致"
-    else:
-        reason = f"反応条件不一致 (Target: {TARGET_CHANNEL_ID} != Current: {message.channel.id})"
-
-    print(f"判定結果: {should_reply} (理由: {reason})")
 
     if should_reply:
         try:
-            print("AI生成を開始します...")
             async with message.channel.typing():
-                prompt = f"返事をしてください。\nユーザーの発言: {message.content}"
-                response = await model.generate_content_async(prompt)
-                print(f"AI生成完了。返信します: {response.text[:20]}...")
-                await message.reply(response.text, mention_author=False)
-                print("返信送信完了")
-        except Exception as e:
-            print(f"【エラー発生】処理中にエラー: {e}")
-
-# サーバー維持
-keep_alive()
-try:
-    client.run(DISCORD_TOKEN)
-except Exception as e:
-    print(f"【起動エラー】: {e}")
+                # 会話ログの作成
+                history = []
+                async for msg in message.channel.history(limit=5):
+                    # Bot自身の発言は「AIまう」、ユーザーの発言は名前を取得
+                    name = "AIまう" if msg.author == client.user else msg.author.display_name
+                    
+                    # コンテンツのクリーニング（メンション文字列 @AIまう を削除して読みやすくする）
+                    clean_content = msg.content.replace(f
