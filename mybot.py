@@ -129,8 +129,3 @@ async def on_message(message):
 # 5. サーバー維持 & 起動
 # ==================================================
 keep_alive()
-
-if DISCORD_TOKEN:
-    client.run(DISCORD_TOKEN)
-else:
-    print("❌ DISCORD_
