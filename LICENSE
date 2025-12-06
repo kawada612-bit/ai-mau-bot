@@ -1,21 +1,47 @@
-MIT License
+# 🤖 AIまう (Discord Bot)
 
-Copyright (c) 2025 kawada612-bit
+実在するアイドルのツイートデータを学習し、その人格（口調・性格）を模倣して会話する Discord ボットです。
+Google の生成AI「Gemini 2.5 Flash」を使用しており、文脈を読んだ自然な会話が可能です。
 
-Permission is hereby granted, free of charge, to any person obtaining a copy
-of this software and associated documentation files (the "Software"), to deal
-in the Software without restriction, including without limitation the rights
-to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-copies of the Software, and to permit persons to whom the Software is
-furnished to do so, subject to the following conditions:
+## ✨ 機能
 
-The above copyright notice and this permission notice shall be included in all
-copies or substantial portions of the Software.
+* **なりきり会話:** 独特な挨拶（「やほす〜」「おあよ〜」）やタメ口、絵文字の使い方など、学習元のキャラクターを忠実に再現します。
+* **メンション応答:** `@AIまう` とメンションを送ると、どこでも返信します。
+* **特定チャンネルでの雑談:** 設定したチャンネル（`TARGET_CHANNEL_ID`）では、メンションなしで全ての会話に反応します。
+* **文脈理解:** 直近の会話ログを読み取り、前後の流れを汲んだ返答を行います。
 
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-SOFTWARE.
+## 🛠️ 使用技術
+
+* **言語:** Python 3.10+
+* **ライブラリ:**
+    * `discord.py` (Discord APIラッパー)
+    * `google-generativeai` (Gemini APIクライアント)
+    * `flask` (サーバー維持用)
+* **インフラ:** Render (Web Service) + UptimeRobot/Cron-job (常時稼働用)
+
+## 🚀 セットアップ手順 (ローカル / Render)
+
+### 1. 必要な環境変数の設定
+このボットを動かすには、以下の環境変数を設定する必要があります。セキュリティのため、コードには直接書かないでください。
+
+| 変数名 | 説明 | 取得方法 |
+| :--- | :--- | :--- |
+| `DISCORD_TOKEN` | Discord Botのトークン | Discord Developer Portal > Bot > Token |
+| `GEMINI_API_KEY` | Google Gemini APIキー | Google AI Studio > Get API key |
+| `TARGET_CHANNEL_ID` | 雑談用チャンネルのID (数字) | Discordでチャンネル名を右クリック > IDをコピー |
+
+### 2. インストール (ローカル実行の場合)
+
+```bash
+# リポジトリのクローン
+git clone [https://github.com/あなたのユーザー名/ai-mau-bot.git](https://github.com/あなたのユーザー名/ai-mau-bot.git)
+cd ai-mau-bot
+
+# 依存ライブラリのインストール
+pip install -r requirements.txt
+
+# 環境変数をセットして起動 (Mac/Linuxの例)
+export DISCORD_TOKEN="your_token_here"
+export GEMINI_API_KEY="your_api_key_here"
+export TARGET_CHANNEL_ID="123456789"
+python mybot.py
