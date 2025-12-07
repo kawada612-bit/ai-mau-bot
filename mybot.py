@@ -1,8 +1,11 @@
 import discord
 import google.generativeai as genai
 import os
-import time
+from dotenv import load_dotenv # ローカル用
 from keep_alive import keep_alive
+
+# .envファイルを読み込む（ローカル用・Renderでは無視されます）
+load_dotenv()
 
 # ==================================================
 # 1. 環境変数の読み込み
@@ -17,7 +20,7 @@ except:
     TARGET_CHANNEL_ID = 0
 
 # ==================================================
-# 2. キャラクター設定の読み込み
+# 2. キャラクター設定の読み込み (ここをシンプルに！)
 # ==================================================
 PROFILE_FILE = "mau_profile.txt"
 DEFAULT_PROFILE = "あなたはアイドルの「AIまう」です。明るく親しみやすく振る舞ってください。"
@@ -30,18 +33,19 @@ except Exception as e:
     print(f"⚠️ プロフィール読み込みエラー: {e}")
     PROFILE_DATA = DEFAULT_PROFILE
 
-# 基本システムプロンプト
+# システムプロンプトの構築
 CHARACTER_SETTING = f"""
 あなたは以下の設定を持つ「AIまう」になりきって発言してください。
+
 {PROFILE_DATA}
 """
 
 # ==================================================
-# 3. AIモデルの設定 (Gemini 2.5 Flash)
+# 3. AIモデルの設定
 # ==================================================
 genai.configure(api_key=GEMINI_API_KEY)
 model = genai.GenerativeModel(
-    model_name='gemini-2.5-flash',
+    model_name='gemini-flash-latest',
     system_instruction=CHARACTER_SETTING
 )
 
@@ -65,7 +69,6 @@ async def on_message(message):
 
     should_reply = False
     
-    # メンション または 専用チャンネル で反応
     if client.user in message.mentions:
         should_reply = True
     elif message.channel.id == TARGET_CHANNEL_ID:
@@ -86,6 +89,7 @@ async def on_message(message):
 
                 # プロンプト作成
                 user_name = message.author.display_name
+                
                 prompt = f"""
                 あなたはアイドルの「AIまう」です。
                 現在、ファンの「{user_name}」さんからメッセージが届きました。
@@ -94,9 +98,9 @@ async def on_message(message):
                 {conversation_log}
 
                 【指示】
-                ・mau_profile.txt の設定（特にリプライモード）を適用してください。
+                ・mau_profile.txt の設定（リプライモード）を適用してください。
                 ・文頭で必ず「{user_name}！」や「{user_name}ちゃん！」と名前を呼んでください。
-                ・友達のように親近感を持って、タメ口で返信してください。
+                ・親しい友達のようにタメ口で返信してください。
                 """
                 
                 response = await model.generate_content_async(prompt)
@@ -106,7 +110,12 @@ async def on_message(message):
         except Exception as e:
             print(f"❌ エラー発生: {e}")
 
-# サーバー維持 & 起動
+# ==================================================
+# 5. 起動
+# ==================================================
 keep_alive()
+
 if DISCORD_TOKEN:
     client.run(DISCORD_TOKEN)
+else:
+    print("❌ DISCORD_TOKEN がありません")
