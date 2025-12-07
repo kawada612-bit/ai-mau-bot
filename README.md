@@ -37,6 +37,15 @@ Google の生成AI「Gemini 2.5 Flash」を使用しており、文脈を読ん�
 git clone [https://github.com/あなたのユーザー名/ai-mau-bot.git](https://github.com/あなたのユーザー名/ai-mau-bot.git)
 cd ai-mau-bot
 
+# 仮想環境を作成
+python3 -m venv venv
+
+# 仮想環境に入る (Mac/Linux)
+source venv/bin/activate
+
+# ※ Windowsの場合: 
+source venv/Scripts/activate
+
 # 依存ライブラリのインストール
 pip install -r requirements.txt
 
