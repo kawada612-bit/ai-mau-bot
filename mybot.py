@@ -71,9 +71,16 @@ async def on_ready():
 
 @client.event
 async def on_message(message):
+    # -----------------------------------------------------------
+    # 🛡️ フィルタリング（自分自身 & システムメッセージを無視）
+    # -----------------------------------------------------------
     if message.author == client.user:
         return
-
+    
+    # これで「ピン留め」などの通知に反応しなくなります
+    if message.is_system():
+        return
+    
     should_reply = False
     if client.user in message.mentions:
         should_reply = True
