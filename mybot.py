@@ -14,7 +14,7 @@ load_dotenv()
 # ==================================================
 DISCORD_TOKEN = os.getenv("DISCORD_TOKEN")
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
-GROQ_API_KEY = os.getenv("GROQ_API_KEY")  # 👈 Groqキー追加
+GROQ_API_KEY = os.getenv("GROQ_API_KEY")  # 👈 Groqキー
 TARGET_CHANNEL_ID_RAW = os.getenv("TARGET_CHANNEL_ID")
 
 try:
@@ -87,11 +87,32 @@ async def on_message(message):
     if message.is_system():
         return
 
+    # ===============================================================
+    # 🧠 反応するかどうかの判定ロジック (アップデート版)
+    # ===============================================================
     should_reply = False
-    if client.user in message.mentions:
+    
+    # 1. 自分がメンションに含まれているか？
+    is_mentioned = client.user in message.mentions
+    
+    # 2. 他人へのメンションが含まれているか？ (自分以外へのメンションがあるか)
+    other_mentions = [user for user in message.mentions if user != client.user]
+    has_other_mentions = len(other_mentions) > 0
+
+    if is_mentioned:
+        # A. 自分宛てなら、他に誰がいようと絶対に反応する (複数メンション対応)
         should_reply = True
+        
     elif message.channel.id == TARGET_CHANNEL_ID:
-        should_reply = True
+        # B. 指定チャンネルの場合
+        if has_other_mentions:
+            # 他の人へのメンションがある場合は、割り込まない (無視)
+            should_reply = False
+        else:
+            # 誰へのメンションもない(=独り言や雑談)なら反応する
+            should_reply = True
+
+    # ===============================================================
 
     if should_reply:
         try:
@@ -126,6 +147,7 @@ async def on_message(message):
                 3. **相手が英語で話しかけてきた場合は英語で、日本語なら日本語で返信してください。**
                    (If the user speaks English, reply in English with the same idol personality.)
                 4. 親しい友達のようにタメ口で返信してください。
+                5. **返信は「200文字以内」で、Twitterのリプライのように短くテンポよく返してください。長々とした挨拶は省略してOKです。**
                 """
                 
                 # ===========================================================
