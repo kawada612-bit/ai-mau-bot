@@ -4,6 +4,7 @@ import os
 import asyncio
 from dotenv import load_dotenv
 from keep_alive import keep_alive
+from groq import Groq  # 👈 Groqライブラリ
 
 # ローカル用設定読み込み
 load_dotenv()
@@ -13,6 +14,7 @@ load_dotenv()
 # ==================================================
 DISCORD_TOKEN = os.getenv("DISCORD_TOKEN")
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
+GROQ_API_KEY = os.getenv("GROQ_API_KEY")  # 👈 Groqキー追加
 TARGET_CHANNEL_ID_RAW = os.getenv("TARGET_CHANNEL_ID")
 
 try:
@@ -40,21 +42,29 @@ CHARACTER_SETTING = f"""
 """
 
 # ==================================================
-# 3. AIモデルの設定 (ハイブリッド構成)
+# 3. AIモデルの設定 (トリプルハイブリッド構成)
 # ==================================================
 genai.configure(api_key=GEMINI_API_KEY)
 
-# 優先モデル (最新・最強)
+# ① 優先モデル (Gemini 2.5 Flash)
 model_priority = genai.GenerativeModel(
     model_name='gemini-2.5-flash',
     system_instruction=CHARACTER_SETTING
 )
 
-# 予備モデル (軽量・別枠)
-model_backup = genai.GenerativeModel(
+# ② 予備モデル (Gemini 2.5 Flash Lite)
+model_backup_1 = genai.GenerativeModel(
     model_name='gemini-2.5-flash-lite',
     system_instruction=CHARACTER_SETTING
 )
+
+# ③ 最終兵器 (Groq - Llama 3)
+if GROQ_API_KEY:
+    groq_client = Groq(api_key=GROQ_API_KEY)
+    print("✅ Groqクライアント(Llama 3)の準備完了")
+else:
+    groq_client = None
+    print("⚠️ GROQ_API_KEY未設定: Llama 3 バックアップは無効です")
 
 # ==================================================
 # 4. Discordクライアントの設定
@@ -71,16 +81,12 @@ async def on_ready():
 
 @client.event
 async def on_message(message):
-    # -----------------------------------------------------------
-    # 🛡️ フィルタリング（自分自身 & システムメッセージを無視）
-    # -----------------------------------------------------------
     if message.author == client.user:
         return
-    
-    # これで「ピン留め」などの通知に反応しなくなります
+    # システムメッセージ（ピン留め通知など）は無視
     if message.is_system():
         return
-    
+
     should_reply = False
     if client.user in message.mentions:
         should_reply = True
@@ -90,16 +96,23 @@ async def on_message(message):
     if should_reply:
         try:
             async with message.channel.typing():
+                # ---------------------------------------------------
+                # 📝 会話履歴の作成
+                # ---------------------------------------------------
                 history = []
                 async for msg in message.channel.history(limit=10):
-                    name = "AIまう" if msg.author == client.user else msg.author.display_name
-                    clean_content = msg.content.replace(f"<@{client.user.id}>", "").strip()
-                    history.append(f"{name}: {clean_content}")
+                    if not msg.is_system():
+                        name = "AIまう" if msg.author == client.user else msg.author.display_name
+                        clean_content = msg.content.replace(f"<@{client.user.id}>", "").strip()
+                        history.append(f"{name}: {clean_content}")
                 
                 history.reverse()
                 conversation_log = "\n".join(history)
-
                 user_name = message.author.display_name
+                
+                # ---------------------------------------------------
+                # 📝 プロンプト作成 (全モデル共通)
+                # ---------------------------------------------------
                 prompt = f"""
                 あなたはアイドルの「AIまう」です。
                 現在、ファンの「{user_name}」さんからメッセージが届きました。
@@ -116,50 +129,80 @@ async def on_message(message):
                 """
                 
                 # ===========================================================
-                # 🤖 エラーハンドリング付き生成ロジック
+                # 🤖 トリプル・ハイブリッド生成ロジック
                 # ===========================================================
                 response_text = ""
-                error_footer = "" 
+                used_model = "Gemini 2.5" # ログ用
+                footer_note = "" # ユーザーへの注釈
                 
                 try:
-                    # ① まず優先モデル(2.5)で挑戦
-                    print(f"✨ 2.5-Flash(優先)で生成中...")
+                    # ---------------------------------------------------
+                    # ① Gemini 2.5 Flash (メイン)
+                    # ---------------------------------------------------
+                    print(f"✨ 1. Gemini 2.5 Flash で挑戦中...")
                     response = await model_priority.generate_content_async(prompt)
                     response_text = response.text
                 
-                except Exception as e:
-                    error_msg = str(e)
-                    print(f"⚠️ 優先モデルエラー発生: {error_msg}")
-
-                    if "429" in error_msg or "ResourceExhausted" in error_msg:
-                        print("📉 原因: リミット切れ")
-                        # error_footer = "\n\n(⚠️ API制限がかかったから、予備モデルに切り替えたよ！)"
-                    elif "404" in error_msg:
-                        print("📉 原因: モデル不明")
-                        error_footer = "\n\n(⚠️ モデルが見つからないエラーが出たから、予備モデルを使うね！)"
-                    else:
-                        error_footer = "\n\n(⚠️ メインモデルでエラーが出たから、予備モデルで対応するね！)"
-
-                    # ② 予備モデル(1.5系)で再挑戦
-                    print("♻️ 予備モデルに切り替えます...")
+                except Exception as e1:
+                    print(f"⚠️ Gemini 2.5 エラー: {e1}")
                     try:
-                        response = await model_backup.generate_content_async(prompt)
-                        response_text = response.text + error_footer
-                        print("✅ 予備モデルで成功しました")
+                        # ---------------------------------------------------
+                        # ② Gemini 2.5 Flash Lite (サブ)
+                        # ---------------------------------------------------
+                        print("♻️ 2. Gemini 2.5 Lite に切り替えます...")
+                        response = await model_backup_1.generate_content_async(prompt)
+                        response_text = response.text
+                        used_model = "Gemini Lite"
+                        footer_note = "\n\n(※省エネモード🔋)"
                         
                     except Exception as e2:
-                        # ③ 予備モデルもダメだった場合
-                        print(f"❌ 予備モデルもエラー: {e2}")
-                        
-                        if "429" in str(e2):
-                            response_text = "APIのリミットを使い切っちゃったみたい！😭\n今日はもう動けないから、また明日遊ぼうね〜💦 (Quota Exceeded)"
-                        elif "Safety" in str(e2) or "Blocked" in str(e2):
-                            response_text = "その内容はAIの安全フィルターに引っかかっちゃった！言えないよ〜🙅‍♀️ (Safety Block)"
+                        print(f"⚠️ Gemini Lite エラー: {e2}")
+                        # ---------------------------------------------------
+                        # ③ Groq Llama 3 (最終兵器)
+                        # ---------------------------------------------------
+                        if groq_client:
+                            print("🔥 3. Groq (Llama 3) 出動！！")
+                            try:
+                                # Groq API呼び出し
+                                completion = groq_client.chat.completions.create(
+                                    model="llama-3.3-70b-versatile", # 高性能モデル
+                                    messages=[
+                                        # システム設定を注入
+                                        {"role": "system", "content": CHARACTER_SETTING},
+                                        {"role": "user", "content": prompt}
+                                    ],
+                                    temperature=0.7,
+                                    max_tokens=1024,
+                                )
+                                response_text = completion.choices[0].message.content
+                                used_model = "Groq Llama 3"
+                                footer_note = "\n\n(※規制モード🚀)"
+                                print("✅ Groqで生成成功！")
+                                
+                            except Exception as e3:
+                                print(f"❌ Groqもエラー: {e3}")
+                                response_text = "ごめんね、今日は回線が全部パンクしちゃったみたい😵‍💫💦 また明日遊ぼうね！"
                         else:
-                            response_text = "システムエラーが発生したよ！ログを確認してね💦 (Internal Server Error)"
+                            response_text = "ごめんね、ちょっと調子悪いみたい…💦 (Groqキー未設定)"
 
-                # Discordに返信
-                await message.reply(response_text, mention_author=False)
+                # -----------------------------------------------------------
+                # 📨 送信処理 (2000文字自動分割)
+                # -----------------------------------------------------------
+                print(f"📨 返信モデル: {used_model}")
+                
+                # 注釈を結合
+                final_text = response_text + footer_note
+
+                if len(final_text) > 2000:
+                    for i in range(0, len(final_text), 2000):
+                        chunk = final_text[i:i+2000]
+                        if i == 0:
+                            await message.reply(chunk, mention_author=False)
+                        else:
+                            await message.channel.send(chunk)
+                else:
+                    await message.reply(final_text, mention_author=False)
+                    
                 print(f"📨 返信完了: {user_name} へ")
 
         except Exception as e:

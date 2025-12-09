@@ -1,7 +1,8 @@
 # 🤖 AIまう (Discord Bot)
 
 実在するアイドルのツイートデータを学習し、その人格（口調・性格）を模倣して会話する Discord ボットです。
-Google の生成AI「Gemini 2.5 Flash」を使用しており、文脈を読んだ自然な会話が可能です。
+Google の生成AI「Gemini 2.5 Flash」を主軸に、予備の「Gemini 2.5 Flash Lite」、さらに最終手段として「Groq (Llama 3)」を搭載した**トリプルハイブリッド構成**。
+API制限やサーバーダウン時でも会話を継続できる、極めて高い可用性を実現しています。
 
 ## ✨ 機能
 
@@ -16,6 +17,7 @@ Google の生成AI「Gemini 2.5 Flash」を使用しており、文脈を読ん�
 * **ライブラリ:**
     * `discord.py` (Discord APIラッパー)
     * `google-generativeai` (Gemini APIクライアント)
+    * `groq` (Llama 3 高速推論)
     * `flask` (サーバー維持用)
 * **インフラ:** Render (Web Service) + UptimeRobot/Cron-job (常時稼働用)
 
@@ -28,6 +30,7 @@ Google の生成AI「Gemini 2.5 Flash」を使用しており、文脈を読ん�
 | :--- | :--- | :--- |
 | `DISCORD_TOKEN` | Discord Botのトークン | Discord Developer Portal > Bot > Token |
 | `GEMINI_API_KEY` | Google Gemini APIキー | Google AI Studio > Get API key |
+| `GROQ_API_KEY` | Groq APIキー (バックアップ用) | Groq Console > Create API Key |
 | `TARGET_CHANNEL_ID` | 雑談用チャンネルのID (数字) | Discordでチャンネル名を右クリック > IDをコピー |
 
 ### 2. インストール (ローカル実行の場合)
