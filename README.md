@@ -49,9 +49,19 @@ source venv/bin/activate
 # 依存ライブラリのインストール
 pip install -r requirements.txt
 
-# 起動
+# 起動 (本番/通常)
 python -m src.main
+
+# 起動 (開発モード)
+./run_dev.sh
 ````
+
+## 🤝 開発について
+このプロジェクトは **Git Flow Lite** を採用しています。
+*   `main`: 本番環境 (自動デプロイ)
+*   `develop`: 開発用ブランチ
+
+詳細は [docs/CONTRIBUTING.md](docs/CONTRIBUTING.md) をご覧ください。
 
 ## 📄 ドキュメント
 
