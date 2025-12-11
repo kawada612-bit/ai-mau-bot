@@ -16,9 +16,16 @@ graph TD
     
     GeminiSub -->|成功時| Note1[末尾に ※省エネモード を付与]
     Groq -->|成功時| Note2[末尾に ※規制モード を付与]
-````
 
-## 2\. 会話・挙動ロジック
+    subgraph "Data Sync Logic"
+        TimeTree[TimeTree (External)] -->|Scraping| Worker[Sync Worker (Playwright)]
+        Worker -->|AI Parsing| GroqWorker[Groq (Llama 3)]
+        GroqWorker -->|Structured Data| DB[(Supabase)]
+        DB -->|RAG / Live Info| Bot
+    end
+```
+
+## 2. 会話・挙動ロジック
 
 ### 🧠 記憶と文脈
 
@@ -40,20 +47,42 @@ graph TD
 3.  **それ以外**
       * → 無視します。
 
-## 3\. ファイル構成
+## 3. ファイル構成
 
 | ファイル名 | 役割 |
 | :--- | :--- |
-| `mybot.py` | ボットのメインプログラム。Discord接続、AI呼び出しロジック、Flaskサーバーを含む。 |
-| `mau_profile.txt` | AIへのシステムプロンプト（人格定義、Wiki情報、会話ルール）。 |
+| `src/main.py` | ボットのメインプログラム。Discord接続、AI呼び出しロジック。 |
+| `src/server.py` | UptimeRobot用サーバー (Keep-Alive)。 |
+| `src/sync_schedule.py` | TimeTree同期・AI整形・DB保存を行うワーカー。 |
+| `src/config.py` | 環境変数と定数管理。 |
+| `src/ai/persona.py` | AIへのシステムプロンプト（人格定義、Wiki情報、会話ルール）。 |
+| `src/ai/core.py` | AI推論ロジック (Gemini / Groq)。 |
+| `src/check_timetree.py` | (診断用) TimeTree接続テスト。 |
 | `requirements.txt` | 依存ライブラリ一覧。Renderのデプロイ時に使用。 |
 | `BACKLOG.md` | 機能追加やバグ修正のタスク管理表。 |
 
-## 4\. 管理情報 (Service Stack)
+## 4. 管理情報 (Service Stack)
 
 | サービス | 用途 | プラン |
 | :--- | :--- | :--- |
 | **Render** | ホスティング (Web Service) | Free (15分スリープあり) |
 | **UptimeRobot** | 死活監視 (Keep-Alive) | Free (5分間隔) |
+| **Supabase** | データベース (PostgreSQL) | Free |
 | **Google AI Studio** | AI推論 (Gemini) | Free |
 | **Groq Cloud** | AI推論 (Llama 3) | Free |
+
+## 5. データベース設計
+
+**Supabase (PostgreSQL)**
+
+### `schedules` テーブル
+TimeTreeから同期したイベント情報を格納します。
+- `source_id` (PK): TimeTreeのイベントID
+- `title`: イベント名
+- `start_at`: 開始日時 (ISO 8601)
+- `end_at`: 終了日時
+- `description`: 詳細メモ
+- `updated_at`: 情報更新日時
+
+### `x_posts` テーブル
+X (旧Twitter) のポストをアーカイブします。（今後実装予定）
