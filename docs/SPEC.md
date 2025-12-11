@@ -9,13 +9,14 @@ graph TD
     User[ユーザー] -->|Discord| Bot[AIまう]
     
     subgraph "AI Brain Logic"
-        Bot -->|優先 1| GeminiMain[Gemini 2.5 Flash]
-        GeminiMain -.->|Error/Limit| GeminiSub[Gemini 2.5 Flash Lite]
-        GeminiSub -.->|Error/Limit| Groq[Groq (Llama 3.3)]
+        Bot -->|優先 1| GeminiMain["Gemini 2.5 Flash"]
+        GeminiMain -.->|Error/Limit| GeminiSub["Gemini 2.5 Flash Lite"]
+        GeminiSub -.->|Error/Limit| Groq["Groq (Llama 3.3)"]
     end
     
-    GeminiSub -->|成功時| Note1[末尾に ※省エネモード を付与]
-    Groq -->|成功時| Note2[末尾に ※規制モード を付与]
+    GeminiSub -->|成功時| Note1["末尾に ※省エネモード を付与"]
+    Groq -->|成功時| Note2["末尾に ※規制モード を付与"]
+````
 
     subgraph "Data Sync Logic"
         TimeTree[TimeTree (External)] -->|Scraping| Worker[Sync Worker (Playwright)]
