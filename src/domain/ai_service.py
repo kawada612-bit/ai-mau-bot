@@ -3,9 +3,9 @@ import logging
 import asyncio
 import google.generativeai as genai # type: ignore
 from groq import Groq
-from src import config
-from src.ai.persona import CHARACTER_SETTING
-from src.logger import setup_logger
+from src.core import config
+from src.domain.persona import CHARACTER_SETTING
+from src.core.logger import setup_logger
 
 logger = setup_logger(__name__)
 

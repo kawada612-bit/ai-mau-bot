@@ -3,7 +3,7 @@ import requests
 import json
 import datetime
 from bs4 import BeautifulSoup
-from src.logger import setup_logger
+from src.core.logger import setup_logger
 
 logger = setup_logger(__name__)
 

@@ -19,4 +19,4 @@ echo "🚀 Starting AI-Mau in DEVELOPMENT mode..."
 echo "----------------------------------------"
 
 # Run the bot
-python -m src.main
+python -m src.app.main

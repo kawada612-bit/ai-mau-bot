@@ -29,7 +29,7 @@ MAU_ENV: str = os.getenv("MAU_ENV", "production")
 
 # File Paths
 # Construct absolute paths to ensure they work regardless of where the script is run from
-BASE_DIR: str = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+BASE_DIR: str = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 DATA_DIR: str = os.path.join(BASE_DIR, "data")
 PROFILE_FILE_PATH: str = os.path.join(DATA_DIR, "mau_profile.txt")
 

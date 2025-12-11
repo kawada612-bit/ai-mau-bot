@@ -1,6 +1,6 @@
 
 import os
-from src import config
+from src.core import config
 
 def load_persona():
     """

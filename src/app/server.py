@@ -1,7 +1,7 @@
 
 from flask import Flask
 from threading import Thread
-from src.logger import setup_logger
+from src.core.logger import setup_logger
 
 logger = setup_logger(__name__)
 

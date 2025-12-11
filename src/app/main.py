@@ -1,8 +1,8 @@
 
-from src import config
-from src import server
-from src import bot_client
-from src.logger import setup_logger
+from src.core import config
+from src.app import server
+from src.app import bot as bot_client
+from src.core.logger import setup_logger
 
 logger = setup_logger(__name__)
 

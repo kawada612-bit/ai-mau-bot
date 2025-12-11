@@ -1,9 +1,9 @@
 
 import discord
 import asyncio
-from src import config
-from src.ai.core import AIBrain
-from src.logger import setup_logger
+from src.core import config
+from src.domain.ai_service import AIBrain
+from src.core.logger import setup_logger
 
 logger = setup_logger(__name__)
 

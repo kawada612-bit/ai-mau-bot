@@ -7,8 +7,8 @@ from dateutil.relativedelta import relativedelta
 from playwright.sync_api import sync_playwright
 from supabase import create_client
 from groq import Groq
-from src import config
-from src.logger import setup_logger
+from src.core import config
+from src.core.logger import setup_logger
 
 logger = setup_logger(__name__)
 
@@ -60,15 +60,39 @@ def refine_time_with_groq(title: str, date_str: str, note: str) -> tuple[str | N
         )
         content = completion.choices[0].message.content or "{}"
         data = json.loads(content)
-        return data.get("start_at"), data.get("end_at")
+        
+        def normalize_time(t_str: str | None) -> str | None:
+            if not t_str: return None
+            try:
+                # 2024-12-31T25:10:00+09:00 のような表記を処理
+                dt = datetime.fromisoformat(t_str)
+                return dt.isoformat()
+            except ValueError:
+                # もし標準ISOでパースできない場合（時間外など）、手動で補正
+                # ここでは簡易的に、Tで分割して時間をチェック
+                try:
+                    date_part, time_part = t_str.split('T')
+                    h, m, s_plus = time_part.split(':', 2)
+                    hour = int(h)
+                    if hour >= 24:
+                        # 日付を進める
+                        base_dt = datetime.fromisoformat(f"{date_part}T00:00:00+09:00")
+                        delta = timedelta(hours=hour, minutes=int(m))
+                        new_dt = base_dt + delta
+                        return new_dt.isoformat()
+                except:
+                    pass
+                return t_str
+
+        return normalize_time(data.get("start_at")), normalize_time(data.get("end_at"))
     except Exception as e:
         logger.warning(f"AI解析エラー: {e}")
         return None, None
 
-def fetch_and_sync() -> None:
+def fetch_all_history() -> None:
     if not check_env_vars(): return
     
-    logger.info("🚀 同期プロセスを開始します (強制実行モード)...")
+    logger.info("🚀 全期間同期プロセスを開始します (One-shot)...")
     all_events = {}
 
     with sync_playwright() as p:
@@ -87,19 +111,27 @@ def fetch_and_sync() -> None:
 
         page.on("response", handle_response)
 
-        # 今月から向こう4ヶ月分をシンプルに巡回
-        today = datetime.now()
-        for i in range(4):
-            target_date = today + relativedelta(months=i)
-            date_param = target_date.strftime("%Y-%m-01")
+        # ---------------------------------------------------------
+        # 🗓 2024年10月(開設) 〜 2025年12月(来年末) までループ
+        # ---------------------------------------------------------
+        start_date = datetime(2024, 10, 1)
+        end_date = datetime(2025, 12, 31)
+        
+        current_date = start_date
+        while current_date <= end_date:
+            date_param = current_date.strftime("%Y-%m-01")
             url = f"{TIMETREE_BASE_URL}?monthly={date_param}"
             
             logger.info(f"🔄 巡回: {date_param} ...")
             try:
                 page.goto(url, wait_until="networkidle")
-                page.wait_for_timeout(1500)
+                # データ取得漏れを防ぐため少し長めに待機
+                page.wait_for_timeout(2000)
             except Exception as e:
                 logger.warning(f"⚠️ タイムアウト: {e}")
+            
+            # 翌月へ
+            current_date += relativedelta(months=1)
 
         browser.close()
 
@@ -131,21 +163,19 @@ def fetch_and_sync() -> None:
             end_at = None
             is_all_day = event.get("all_day", False)
 
-            # AI補正
+            # AI補正 (Groq)
             if note and groq_client:
-                # Same-line progress logging not ideal with standard logging, changing to minimal log
-                # logger currently adds newlines.
-                # Just log finding
+                # logger.info(f"  🤖 AI解析: {title[:15]}...", end="", flush=True) # Cannot flush with logger
                 ai_start, ai_end = refine_time_with_groq(title, dt_obj.strftime('%Y-%m-%d'), note)
                 
                 if ai_start:
                     start_at = ai_start
                     is_all_day = False
                     if ai_end: end_at = ai_end
-                    logger.info(f"  🤖 AI解析成功: {title[:15]}... -> {ai_start}")
+                    logger.info(f"  ✅ AI解析成功: {title[:15]}... -> {ai_start}")
                     time.sleep(0.3)
                 else:
-                    logger.debug(f"  🤖 AI解析スキップ: {title[:15]}...")
+                    logger.debug(f"  ⏭️  AI解析スキップ: {title[:15]}...")
 
             upsert_data.append({
                 "source_id": source_id,
@@ -166,7 +196,7 @@ def fetch_and_sync() -> None:
             if config.SUPABASE_URL and config.SUPABASE_KEY:
                 supabase = create_client(config.SUPABASE_URL, config.SUPABASE_KEY)
                 supabase.table("schedules").upsert(upsert_data, on_conflict="source_id").execute()
-                logger.info(f"✅ 同期完了！ {len(upsert_data)} 件を保存しました。")
+                logger.info(f"🎉 完全同期完了！ {len(upsert_data)} 件を保存しました。")
             else:
                 logger.error("Supabase config failed")
         except Exception as e:
@@ -175,4 +205,4 @@ def fetch_and_sync() -> None:
         logger.warning("⚠️ 保存データなし")
 
 if __name__ == "__main__":
-    fetch_and_sync()
+    fetch_all_history()
