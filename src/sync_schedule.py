@@ -1,0 +1,169 @@
+import time
+import json
+import sys
+from datetime import datetime, timedelta, timezone
+from dateutil.relativedelta import relativedelta
+from playwright.sync_api import sync_playwright
+from supabase import create_client
+from groq import Groq
+from src import config
+
+# 定数
+TIMETREE_BASE_URL = "https://timetreeapp.com/public_calendars/lollipop_1116"
+
+# Groq初期化
+if config.GROQ_API_KEY:
+    groq_client = Groq(api_key=config.GROQ_API_KEY)
+else:
+    groq_client = None
+
+def check_env_vars():
+    """環境変数の設定状況を確認"""
+    print("\n--- ⚙️ 設定チェック ---")
+    print(f"Supabase URL : {'✅ OK' if config.SUPABASE_URL else '❌ Missing'}")
+    print(f"Supabase Key : {'✅ OK' if config.SUPABASE_KEY else '❌ Missing'}")
+    print(f"Groq Key     : {'✅ OK' if config.GROQ_API_KEY else '❌ Missing'}")
+    print("-----------------------\n")
+    return bool(config.SUPABASE_URL and config.SUPABASE_KEY)
+
+def refine_time_with_groq(title, date_str, note):
+    """Groq (Llama 3) でメモ欄から時間を抽出"""
+    if not note or not groq_client: return None, None
+    
+    prompt = f"""
+    You are a scheduler assistant. Extract START and END times from the text.
+    
+    [Input]
+    Date: {date_str}
+    Title: {title}
+    Note: {note}
+
+    [Rules]
+    1. Output JSON: {{ "start_at": "YYYY-MM-DDTHH:MM:SS+09:00", "end_at": "..." or null }}
+    2. Handle "1040" as "10:40".
+    3. If "OPEN" and "START" exist, use "START". If only "OPEN", use "OPEN".
+    4. If time is "TBA" or unknown, return null for both.
+    """
+    
+    try:
+        completion = groq_client.chat.completions.create(
+            model="llama-3.3-70b-versatile",
+            messages=[
+                {"role": "system", "content": "Output JSON only."},
+                {"role": "user", "content": prompt}
+            ],
+            temperature=0,
+            response_format={"type": "json_object"}
+        )
+        content = completion.choices[0].message.content
+        data = json.loads(content)
+        return data.get("start_at"), data.get("end_at")
+    except:
+        return None, None
+
+def fetch_and_sync():
+    if not check_env_vars(): return
+    
+    print("🚀 同期プロセスを開始します (強制実行モード)...")
+    all_events = {}
+
+    with sync_playwright() as p:
+        print("🌍 ブラウザ起動中...")
+        browser = p.chromium.launch(headless=True)
+        page = browser.new_page()
+
+        def handle_response(response):
+            if "public_events" in response.url and response.status == 200:
+                try:
+                    data = response.json()
+                    events = data.get("public_events", [])
+                    for e in events:
+                        all_events[e["id"]] = e
+                except: pass
+
+        page.on("response", handle_response)
+
+        # 今月から向こう4ヶ月分をシンプルに巡回
+        today = datetime.now()
+        for i in range(4):
+            target_date = today + relativedelta(months=i)
+            date_param = target_date.strftime("%Y-%m-01")
+            url = f"{TIMETREE_BASE_URL}?monthly={date_param}"
+            
+            print(f"🔄 巡回: {date_param} ...")
+            try:
+                page.goto(url, wait_until="networkidle")
+                page.wait_for_timeout(1500)
+            except Exception as e:
+                print(f"⚠️ タイムアウト: {e}")
+
+        browser.close()
+
+    if not all_events:
+        print("❌ データが見つかりませんでした。")
+        return
+
+    # データ整形と保存
+    upsert_data = []
+    events_list = list(all_events.values())
+    print(f"\n📦 合計 {len(events_list)} 件のイベントを処理中...")
+
+    for event in events_list:
+        try:
+            source_id = str(event["id"])
+            title = event.get("title", "")
+            note = event.get("note", "")
+            raw_start = event["start_at"] / 1000
+            
+            # 更新日時の取得
+            raw_updated_at = event.get("updated_at")
+            if raw_updated_at:
+                updated_at_dt = datetime.fromtimestamp(raw_updated_at / 1000, timezone.utc)
+            else:
+                updated_at_dt = datetime.now(timezone.utc)
+
+            dt_obj = datetime.fromtimestamp(raw_start, timezone(timedelta(hours=9)))
+            start_at = dt_obj.isoformat()
+            end_at = None
+            is_all_day = event.get("all_day", False)
+
+            # AI補正
+            if note and groq_client:
+                print(f"  🤖 AI解析: {title[:15]}...", end="", flush=True)
+                ai_start, ai_end = refine_time_with_groq(title, dt_obj.strftime('%Y-%m-%d'), note)
+                
+                if ai_start:
+                    start_at = ai_start
+                    is_all_day = False
+                    if ai_end: end_at = ai_end
+                    print(f" ✅ {ai_start}")
+                    time.sleep(0.3)
+                else:
+                    print(" ⏭️  スキップ")
+
+            upsert_data.append({
+                "source_id": source_id,
+                "title": title,
+                "start_at": start_at,
+                "end_at": end_at,
+                "description": note,
+                "url": event.get("url", ""),
+                "image_url": None,
+                "is_all_day": is_all_day,
+                "updated_at": updated_at_dt.isoformat()
+            })
+        except Exception as e:
+            print(f"⚠️ データ変換エラー: {e}")
+
+    if upsert_data:
+        try:
+            supabase = create_client(config.SUPABASE_URL, config.SUPABASE_KEY)
+            supabase.table("schedules").upsert(upsert_data, on_conflict="source_id").execute()
+            print(f"\n✅ 同期完了！ {len(upsert_data)} 件を保存しました。")
+        except Exception as e:
+            print(f"❌ DB保存エラー: {e}")
+    else:
+        print("⚠️ 保存データなし")
+
+if __name__ == "__main__":
+    fetch_and_sync()
