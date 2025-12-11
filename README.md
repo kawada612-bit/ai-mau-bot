@@ -36,25 +36,28 @@ API制限やサーバーダウン時でも会話を継続できる、極めて�
 
 ### 2. インストール & 起動
 
+#### Mac / Linux
 ```bash
-# リポジトリのクローン
-git clone [https://github.com/あなたのユーザー名/ai-mau-bot.git](https://github.com/あなたのユーザー名/ai-mau-bot.git)
-cd ai-mau-bot
-
-# 仮想環境の作成と有効化 (Mac/Linux)
+# 仮想環境作成
 python3 -m venv venv
 source venv/bin/activate
-# (Windowsの場合: venv\Scripts\activate)
 
-# 依存ライブラリのインストール
+# インストール & 起動
 pip install -r requirements.txt
-
-# 起動 (本番/通常)
-python -m src.main
-
-# 起動 (開発モード)
 ./run_dev.sh
-````
+```
+
+#### Windows
+
+```cmd
+:: 仮想環境作成
+python -m venv venv
+.\venv\Scripts\activate
+
+:: インストール & 起動
+pip install -r requirements.txt
+.\run_dev.bat
+```
 
 ## 🤝 開発について
 このプロジェクトは **Git Flow Lite** を採用しています。
@@ -62,6 +65,10 @@ python -m src.main
 *   `develop`: 開発用ブランチ
 
 詳細は [docs/CONTRIBUTING.md](docs/CONTRIBUTING.md) をご覧ください。
+
+## 🤖 開発ツールについて
+このプロジェクトは、AIネイティブエディタ **Google Antigravity** を使用して開発されています。
+ディレクトリ構成やタスク管理は、エージェント主導開発 (Agent-Driven Development) を前提としています。
 
 ## 📄 ドキュメント
 
