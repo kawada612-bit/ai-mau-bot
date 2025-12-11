@@ -11,8 +11,11 @@ intents = discord.Intents.default()
 intents.message_content = True
 client = discord.Client(intents=intents)
 
-# Initialize AI Brain
+from src.domain.analytics_service import AnalyticsService
+
+# Initialize AI Brain & Analytics
 brain = AIBrain()
+analytics = AnalyticsService()
 
 @client.event
 async def on_ready() -> None:
@@ -78,12 +81,32 @@ async def on_message(message: discord.Message) -> None:
                 user_name = message.author.display_name
                 
                 # ---------------------------------------------------
+                # 🤖 High-IQ Analytics Flow
+                # ---------------------------------------------------
+                
+                # Check for triggers (e.g. "ライブいつ？", "予定教えて")
+                ANALYTICS_KEYWORDS = ['いつ', '予定', 'スケジュール', 'ライブ', 'イベント', '何回', '件数', '分析', '教えて']
+                user_msg = message.content
+                
+                context_info = None
+                
+                if any(k in user_msg for k in ANALYTICS_KEYWORDS):
+                    logger.info("🧠 Analytics Keyword Detected. Generating SQL...")
+                    try:
+                        sql = await brain.generate_sql(user_msg, analytics.get_schema_info())
+                        result_md = analytics.execute_query(sql)
+                        context_info = result_md
+                        logger.info("📊 Analysis Result: " + str(context_info)[:50] + "...")
+                    except Exception as e:
+                        logger.error(f"Analytics Error: {e}")
+
+                # ---------------------------------------------------
                 # 🤖 Generate Response (Triple Hybrid with Timeout)
                 # ---------------------------------------------------
                 try:
                     # 30秒タイムアウト設定
                     final_text = await asyncio.wait_for(
-                        brain.generate_response(user_name, conversation_log),
+                        brain.generate_response(user_name, conversation_log, context_info),
                         timeout=30.0
                     )
                 except asyncio.TimeoutError:

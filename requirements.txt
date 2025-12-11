@@ -7,3 +7,5 @@ supabase
 playwright
 python-dateutil
 beautifulsoup4
+pandas
+tabulate

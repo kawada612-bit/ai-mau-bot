@@ -11,10 +11,12 @@ if not exist venv (
 :: Activate venv
 call venv\Scripts\activate
 set MAU_ENV=development
+:: 【追加】PythonをUTF-8モードで強制実行する設定
+set PYTHONUTF8=1
 
 echo 🚀 Starting AI-Mau in DEVELOPMENT mode (Windows)...
 echo ----------------------------------------
 
-:: Run the bot (New path)
+:: Run the bot
 python -m src.app.main
 pause
