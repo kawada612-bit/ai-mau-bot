@@ -5,30 +5,79 @@
 APIの枯渇を防ぐフェイルセーフと、高度な質問に答えるための分析基盤を兼ね備えています。
 
 ```mermaid
-graph TD
-    User["ユーザー"] -->|Discord| Bot["AIまう"]
+graph LR
+    %% --- スタイル定義 ---
+    classDef default fill:#f9f9f9,stroke:#333,stroke-width:1px;
+    classDef user fill:#e1f5fe,stroke:#0288d1,stroke-width:2px,color:#01579b;
+    classDef bot fill:#d1c4e9,stroke:#512da8,stroke-width:2px,color:#311b92;
+    classDef logicGroup fill:#fffde7,stroke:#fbc02d,stroke-width:2px,color:#f57f17,stroke-dasharray: 5 5;
+    classDef ai fill:#c8e6c9,stroke:#388e3c,stroke-width:2px,color:#1b5e20;
+    classDef db fill:#ffe0b2,stroke:#f57c00,stroke-width:2px,color:#e65100,shape:cylinder;
+    classDef external fill:#eceff1,stroke:#78909c,stroke-width:2px,color:#37474f;
+    classDef monitor fill:#ffcdd2,stroke:#d32f2f,stroke-width:2px,color:#b71c1c;
+    classDef errorNote fill:#ff5252,stroke:#d50000,color:#fff,font-weight:bold,stroke-width:2px;
+
+    %% --- ノード定義 ---
+    User("👤 ユーザー"):::user
+    Discord("💬 Discord"):::external
+    UptimeRobot("⏱️ UptimeRobot<br>(死活監視)"):::monitor
     
-    subgraph "AI Brain Logic"
-        Bot -->|"会話"| GeminiMain["Gemini 2.5 Flash"]
-        GeminiMain -.->|"Error/Limit"| GeminiSub["Gemini 2.5 Flash Lite"]
-        GeminiSub -.->|"Error/Limit"| Groq["Groq (Llama 3.3)"]
-    end
-    
-    subgraph "Data Analysis Logic (High-IQ)"
-        Bot -->|"「分析して」「いつ？」"| Analytics["Analytics Service"]
-        Analytics -->|"Load Data"| DB[("Supabase")]
-        Analytics -->|"Create"| SQLite["In-Memory SQLite"]
-        Analytics -->|"Generate SQL"| GeminiMain
-        GeminiMain -->|"SQL Query"| SQLite
-        SQLite -->|"Table Data"| Bot
+    %% Renderホスティング環境
+    subgraph RenderHost ["☁️ Render ホスティング環境 (Free Plan)"]
+        Bot("🤖 AIまう<br>(Bot 本体)"):::bot
+        Worker("🔄 Scheduler Worker<br>(定期実行タスク)"):::bot
+        Analytics("🧠 Analytics Service<br>(分析モジュール)"):::bot
+        SQLite[("📊 In-Memory SQLite<br>(一時DB)")]:::db
     end
 
-    subgraph "Data Sync Logic"
-        %% ここが今回のエラー原因でした
-        TimeTree["TimeTree (External)"] -->|"Scraping"| Worker["Scheduler Worker"]
-        Worker -->|"AI Parsing"| GroqWorker["Groq (Llama 3)"]
-        GroqWorker -->|"Structured Data"| DB
+    %% 外部AIサービス群
+    subgraph AI_Services ["🧠 AI 推論API群 (Free Plan)"]
+        GeminiMain("Google AI Studio<br>Gemini 2.5 Flash"):::ai
+        GeminiSub("Google AI Studio<br>Gemini 2.5 Flash Lite"):::ai
+        GroqAI("Groq Cloud<br>Llama 3.3"):::ai
+        GroqWorker("Groq Cloud<br>Llama 3"):::ai
     end
+
+    %% 外部データベース・他サービス
+    DB[("🗄️ Supabase<br>(PostgreSQL DB)")]:::db
+    TimeTree("📅 TimeTree<br>(外部カレンダー)"):::external
+
+    %% --- フロー接続 ---
+    
+    %% 監視
+    UptimeRobot -.-> RenderHost
+
+    %% メインエントリー
+    User --> Discord --> Bot
+
+    %% === ロジックフロー ===
+
+    %% 1. 通常会話ロジック
+    subgraph Logic_Brain ["🗣️ 通常会話ロジック (AI Brain)"]
+        Bot -->|"① 会話要求"| GeminiMain
+        GeminiMain -.->|"② エラー/制限時"| GeminiSub
+        GeminiSub -.->|"③ エラー/制限時"| GroqAI
+    end
+
+    %% 2. データ分析ロジック
+    subgraph Logic_Analysis ["📈 データ分析ロジック (High-IQ)"]
+        Bot -->|"①「分析して」等"| Analytics
+        Analytics -->|"② データロード"| DB
+        Analytics -->|"③ 一時DB作成"| SQLite
+        Analytics -->|"④ SQL生成要求"| GeminiMain
+        GeminiMain -->|"⑤ SQL実行"| SQLite
+        SQLite -->|"⑥ 結果データ返却"| Bot
+    end
+
+    %% 3. データ同期ロジック
+    subgraph Logic_Sync ["🔄 データ同期ロジック (定期実行)"]
+        TimeTree -->|"① スクレイピング"| Worker
+        Worker -->|"② AI解析要求"| GroqWorker
+        GroqWorker -->|"③ 構造化データ保存"| DB
+    end
+
+    %% サブグラフのスタイル適用
+    class Logic_Brain,Logic_Analysis,Logic_Sync logicGroup;
 ```
 
 ## 2. 会話・挙動ロジック
