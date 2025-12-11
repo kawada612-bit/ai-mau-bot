@@ -1,20 +1,27 @@
 
 import discord
+import asyncio
 from src import config
-from src.ai import core
+from src.ai.core import AIBrain
+from src.logger import setup_logger
+
+logger = setup_logger(__name__)
 
 intents = discord.Intents.default()
 intents.message_content = True
 client = discord.Client(intents=intents)
 
-@client.event
-async def on_ready():
-    print("=========================================")
-    print(f"🚀 起動完了！ログイン名: {client.user}")
-    print("=========================================")
+# Initialize AI Brain
+brain = AIBrain()
 
 @client.event
-async def on_message(message):
+async def on_ready() -> None:
+    logger.info("=========================================")
+    logger.info(f"🚀 起動完了！ログイン名: {client.user}")
+    logger.info("=========================================")
+
+@client.event
+async def on_message(message: discord.Message) -> None:
     if message.author == client.user:
         return
     # Ignore system messages (pinned notifications, etc.)
@@ -27,7 +34,7 @@ async def on_message(message):
     should_reply = False
     
     # 1. 自分がメンションに含まれているか？
-    is_mentioned = client.user in message.mentions
+    is_mentioned = client.user in message.mentions if client.user else False
     
     # 2. 他人へのメンションが含まれているか？ (自分以外へのメンションがあるか)
     other_mentions = [user for user in message.mentions if user != client.user]
@@ -55,11 +62,15 @@ async def on_message(message):
                 # 📝 Generate Conversation History
                 # ---------------------------------------------------
                 history = []
+                # limit=10 yields Message objects
                 async for msg in message.channel.history(limit=10):
                     if not msg.is_system():
                         name = "AIまう" if msg.author == client.user else msg.author.display_name
                         # Remove mention to self from content to avoid confusion
-                        clean_content = msg.content.replace(f"<@{client.user.id}>", "").strip()
+                        if client.user:
+                            clean_content = msg.content.replace(f"<@{client.user.id}>", "").strip()
+                        else:
+                            clean_content = msg.content.strip()
                         history.append(f"{name}: {clean_content}")
                 
                 history.reverse()
@@ -67,9 +78,17 @@ async def on_message(message):
                 user_name = message.author.display_name
                 
                 # ---------------------------------------------------
-                # 🤖 Generate Response (Triple Hybrid)
+                # 🤖 Generate Response (Triple Hybrid with Timeout)
                 # ---------------------------------------------------
-                final_text = await core.generate_response(user_name, conversation_log)
+                try:
+                    # 30秒タイムアウト設定
+                    final_text = await asyncio.wait_for(
+                        brain.generate_response(user_name, conversation_log),
+                        timeout=30.0
+                    )
+                except asyncio.TimeoutError:
+                    logger.error("❌ AI応答タイムアウト")
+                    final_text = "考え中...（エラー: 30秒応答なし）😵‍💫"
 
                 # ---------------------------------------------------
                 # 📨 Send Response (Auto-split 2000 chars)
@@ -84,7 +103,7 @@ async def on_message(message):
                 else:
                     await message.reply(final_text, mention_author=False)
                     
-                print(f"📨 返信完了: {user_name} へ")
+                logger.info(f"📨 返信完了: {user_name} へ")
 
         except Exception as e:
-            print(f"❌ 致命的なエラー: {e}")
+            logger.error(f"❌ 致命的なエラー: {e}")

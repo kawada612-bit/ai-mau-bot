@@ -6,3 +6,4 @@ groq
 supabase
 playwright
 python-dateutil
+beautifulsoup4
