@@ -6,29 +6,28 @@ APIの枯渇を防ぐフェイルセーフと、高度な質問に答えるた�
 
 ```mermaid
 graph TD
-    User[ユーザー] -->|Discord| Bot[AIまう]
+    User["ユーザー"] -->|Discord| Bot["AIまう"]
     
     subgraph "AI Brain Logic"
-        Bot -->|会話| GeminiMain[Gemini 2.5 Flash]
-        GeminiMain -.->|Error/Limit| GeminiSub[Gemini 2.5 Flash Lite]
-        %% 修正箇所: テキストを "" で囲みました
-        GeminiSub -.->|Error/Limit| Groq["Groq (Llama 3.3)"]
+        Bot -->|"会話"| GeminiMain["Gemini 2.5 Flash"]
+        GeminiMain -.->|"Error/Limit"| GeminiSub["Gemini 2.5 Flash Lite"]
+        GeminiSub -.->|"Error/Limit"| Groq["Groq (Llama 3.3)"]
     end
     
     subgraph "Data Analysis Logic (High-IQ)"
-        Bot -->|「分析して」「いつ？」| Analytics[Analytics Service]
-        Analytics -->|Load Data| DB[(Supabase)]
-        Analytics -->|Create| SQLite[In-Memory SQLite]
-        Analytics -->|Generate SQL| GeminiMain
-        GeminiMain -->|SQL Query| SQLite
-        SQLite -->|Table Data| Bot
+        Bot -->|"「分析して」「いつ？」"| Analytics["Analytics Service"]
+        Analytics -->|"Load Data"| DB[("Supabase")]
+        Analytics -->|"Create"| SQLite["In-Memory SQLite"]
+        Analytics -->|"Generate SQL"| GeminiMain
+        GeminiMain -->|"SQL Query"| SQLite
+        SQLite -->|"Table Data"| Bot
     end
 
     subgraph "Data Sync Logic"
-        TimeTree[TimeTree (External)] -->|Scraping| Worker[Scheduler Worker]
-        %% 修正箇所: テキストを "" で囲みました
-        Worker -->|AI Parsing| GroqWorker["Groq (Llama 3)"]
-        GroqWorker -->|Structured Data| DB
+        %% ここが今回のエラー原因でした
+        TimeTree["TimeTree (External)"] -->|"Scraping"| Worker["Scheduler Worker"]
+        Worker -->|"AI Parsing"| GroqWorker["Groq (Llama 3)"]
+        GroqWorker -->|"Structured Data"| DB
     end
 ```
 
