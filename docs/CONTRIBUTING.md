@@ -1,5 +1,13 @@
 # 🤝 AIまうボット 開発ガイド (Contributing Guide)
 
+## 📂 ディレクトリ構成 (Project Structure)
+このプロジェクトは、将来のマイクロサービス化を見据えた「モジュラモノリス構成」を採用しています。
+
+- `src/app/`: Discord Bot本体とWebサーバー (Presentation Layer)
+- `src/domain/`: AIロジックやビジネスロジック (Domain Layer)
+- `src/core/`: 設定やロガーなどの共通基盤 (Core Layer)
+- `src/workers/`: 定期実行タスクやスクレイピング (Worker Layer)
+
 ## 🌿 ブランチ戦略 (Git Flow Lite)
 
 このプロジェクトでは、以下のシンプルなブランチ運用を採用しています。
@@ -24,11 +32,11 @@
 
 **Mac / Linux:**
 ```bash
-# ワンライナー起動スクリプト (venv有効化 + 環境変数セット)
 ./run_dev.sh
 ```
 
 **Windows:**
+
 ```cmd
 .\run_dev.bat
 ```
@@ -52,3 +60,8 @@
 **例:**
 > feat: おみくじ機能を追加
 > fix: Geminiのタイムアウトエラーを修正
+
+## 🤖 開発ツールについて
+このプロジェクトは **Google Antigravity** (AIネイティブエディタ) を使用して開発されています。
+- エージェント主導開発 (Agent-Driven Development) を前提としています。
+- `Phase X` という単位でタスクを管理しています。
