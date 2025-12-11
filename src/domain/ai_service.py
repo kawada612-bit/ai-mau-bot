@@ -41,16 +41,60 @@ class AIBrain:
         else:
             logger.warning("GROQ_API_KEY未設定: Llama 3 バックアップは無効です")
 
-    async def generate_response(self, user_name: str, conversation_log: str) -> str:
+    async def generate_sql(self, user_question: str, schema_info: str) -> str:
+        """
+        Generates a SQL query (SELECT only) based on the user's question and table schema.
+        """
+        if not self.model_priority:
+             return "SELECT * FROM schedules LIMIT 0;" # Fallback
+
+        prompt = f"""
+        You are a Data Analyst.
+        Generate a single SQL query (SQLite syntax) to answer the user's question.
+
+        [Schema]
+        {schema_info}
+
+        [User Question]
+        {user_question}
+
+        [Constraints]
+        1. Output ONLY the raw SQL query. Do not use Markdown (```sql ... ```).
+        2. Use `SELECT` only. No INSERT/UPDATE/DELETE.
+        3. For "today" or relative dates, use SQLite functions like `date('now', 'localtime')` or `datetime('now', 'localtime')`.
+           Example: `WHERE start_at >= date('now', 'localtime')`
+        4. If the question implies "how many", use `COUNT(*)`.
+        5. If the question implies "list" or "schedule", include `title` and `start_at`.
+        """
+        
+        # Try Groq (Llama 3) first
+        if self.groq_client:
+            try:
+                completion = self.groq_client.chat.completions.create(
+                    model="llama-3.3-70b-versatile",
+                    messages=[
+                        {"role": "system", "content": "You are a SQL expert. Output ONLY the raw SQL query string. No Markdown."},
+                        {"role": "user", "content": prompt}
+                    ],
+                    temperature=0.0,
+                    max_tokens=256
+                )
+                sql = completion.choices[0].message.content.strip()
+                return sql.replace("```sql", "").replace("```", "").strip()
+            except Exception as e:
+                logger.warning(f"⚠️ Groq SQL Gen failed: {e}. Falling back to Gemini.")
+
+        # Fallback to Gemini
+        try:
+            response = await self.model_priority.generate_content_async(prompt)
+            return response.text.strip()
+        except Exception as e:
+            logger.error(f"SQL Gen Error: {e}")
+            return "SELECT * FROM schedules LIMIT 0;"
+
+    async def generate_response(self, user_name: str, conversation_log: str, context_info: str = None) -> str:
         """
         Generates a response using the Triple Hybrid approach.
-        
-        Args:
-            user_name (str): The name of the user sending the message.
-            conversation_log (str): The history of the conversation.
-
-        Returns:
-            str: The generated response text.
         """
         
         prompt = f"""
@@ -59,7 +103,19 @@ class AIBrain:
 
         【会話履歴】
         {conversation_log}
+        """
 
+        if context_info:
+            prompt += f"""
+        【参考データ (分析結果)】
+        以下はユーザーの質問に関連するデータベース検索結果です。
+        このデータに基づいて回答してください。データがない場合は「予定はないみたい」と答えてください。
+        ------------------------
+        {context_info}
+        ------------------------
+            """
+
+        prompt += f"""
         【指示】
         1. mau_profile.txt の設定（キャラ設定）を守ってください。
         2. 文頭で必ず「{user_name}！」や「{user_name}ちゃん！」と名前を呼んでください。

@@ -11,7 +11,8 @@ graph TD
     subgraph "AI Brain Logic"
         Bot -->|会話| GeminiMain[Gemini 2.5 Flash]
         GeminiMain -.->|Error/Limit| GeminiSub[Gemini 2.5 Flash Lite]
-        GeminiSub -.->|Error/Limit| Groq[Groq (Llama 3.3)]
+        %% 修正箇所: テキストを "" で囲みました
+        GeminiSub -.->|Error/Limit| Groq["Groq (Llama 3.3)"]
     end
     
     subgraph "Data Analysis Logic (High-IQ)"
@@ -25,7 +26,8 @@ graph TD
 
     subgraph "Data Sync Logic"
         TimeTree[TimeTree (External)] -->|Scraping| Worker[Scheduler Worker]
-        Worker -->|AI Parsing| GroqWorker[Groq (Llama 3)]
+        %% 修正箇所: テキストを "" で囲みました
+        Worker -->|AI Parsing| GroqWorker["Groq (Llama 3)"]
         GroqWorker -->|Structured Data| DB
     end
 ```
@@ -59,28 +61,28 @@ graph TD
 
 ## 3. ファイル構成 (Modular Monolith)
 
-| ディレクトリ | ファイル名 | 役割 |
-| :--- | :--- | :--- |
-| `src/app/` | `main.py` | エントリーポイント。 |
-| | `bot.py` | Discord Bot本体。メッセージ受信・応答制御。 |
-| | `server.py` | UptimeRobot用サーバー (Keep-Alive)。 |
-| `src/domain/` | `ai_service.py` | AI推論ロジック (Gemini / Groq)。 |
-| | `analytics_service.py` | **(New)** AIによるSQL分析・実行サービス。 |
-| | `persona.py` | AIへのシステムプロンプト定義。 |
-| `src/workers/` | `scheduler.py` | TimeTree同期ワーカー（AI補正・DryRun対応）。 |
-| | `fetcher.py` | 過去ログ取得用スクリプト。 |
-| `src/core/` | `config.py` | 環境変数と定数管理。 |
-| | `logger.py` | ロギング設定。 |
+| ディレクトリ   | ファイル名             | 役割                                         |
+| :------------- | :--------------------- | :------------------------------------------- |
+| `src/app/`     | `main.py`              | エントリーポイント。                         |
+|                | `bot.py`               | Discord Bot本体。メッセージ受信・応答制御。  |
+|                | `server.py`            | UptimeRobot用サーバー (Keep-Alive)。         |
+| `src/domain/`  | `ai_service.py`        | AI推論ロジック (Gemini / Groq)。             |
+|                | `analytics_service.py` | **(New)** AIによるSQL分析・実行サービス。    |
+|                | `persona.py`           | AIへのシステムプロンプト定義。               |
+| `src/workers/` | `scheduler.py`         | TimeTree同期ワーカー（AI補正・DryRun対応）。 |
+|                | `fetcher.py`           | 過去ログ取得用スクリプト。                   |
+| `src/core/`    | `config.py`            | 環境変数と定数管理。                         |
+|                | `logger.py`            | ロギング設定。                               |
 
 ## 4. 管理情報 (Service Stack)
 
-| サービス | 用途 | プラン |
-| :--- | :--- | :--- |
-| **Render** | ホスティング | Free |
-| **UptimeRobot** | 死活監視 | Free |
-| **Supabase** | データベース | Free |
-| **Google AI Studio** | AI推論 (Gemini) | Free |
-| **Groq Cloud** | AI推論 (Llama 3) | Free |
+| サービス             | 用途             | プラン |
+| :------------------- | :--------------- | :----- |
+| **Render**           | ホスティング     | Free   |
+| **UptimeRobot**      | 死活監視         | Free   |
+| **Supabase**         | データベース     | Free   |
+| **Google AI Studio** | AI推論 (Gemini)  | Free   |
+| **Groq Cloud**       | AI推論 (Llama 3) | Free   |
 
 ## 5. データベース設計 (Supabase)
 
