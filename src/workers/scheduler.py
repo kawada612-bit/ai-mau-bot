@@ -2,6 +2,7 @@
 import time
 import json
 import sys
+import argparse
 from datetime import datetime, timedelta, timezone
 from dateutil.relativedelta import relativedelta
 from playwright.sync_api import sync_playwright
@@ -65,10 +66,10 @@ def refine_time_with_groq(title: str, date_str: str, note: str) -> tuple[str | N
         logger.warning(f"AI解析エラー: {e}")
         return None, None
 
-def fetch_and_sync() -> None:
+def fetch_and_sync(dry_run: bool = False) -> None:
     if not check_env_vars(): return
     
-    logger.info("🚀 同期プロセスを開始します (強制実行モード)...")
+    logger.info(f"🚀 同期プロセスを開始します (モード: {'Dry Run' if dry_run else '通常実行'})...")
     all_events = {}
 
     with sync_playwright() as p:
@@ -133,17 +134,26 @@ def fetch_and_sync() -> None:
 
             # AI補正
             if note and groq_client:
-                # Same-line progress logging not ideal with standard logging, changing to minimal log
-                # logger currently adds newlines.
-                # Just log finding
                 ai_start, ai_end = refine_time_with_groq(title, dt_obj.strftime('%Y-%m-%d'), note)
                 
                 if ai_start:
-                    start_at = ai_start
-                    is_all_day = False
-                    if ai_end: end_at = ai_end
-                    logger.info(f"  🤖 AI解析成功: {title[:15]}... -> {ai_start}")
-                    time.sleep(0.3)
+                    # 日付整合性チェック
+                    original_date = dt_obj.date()
+                    try:
+                        ai_dt = datetime.fromisoformat(ai_start)
+                        ai_date = ai_dt.date()
+                        
+                        if original_date != ai_date:
+                            logger.warning(f"⚠️ AI Date Mismatch! Skipping AI result. Original: {original_date}, AI: {ai_date}")
+                            # フォールバック: AI結果を破棄して元の時間を使用
+                        else:
+                            start_at = ai_start
+                            is_all_day = False
+                            if ai_end: end_at = ai_end
+                            logger.info(f"  🤖 AI解析成功: {title[:15]}... -> {ai_start}")
+                            time.sleep(0.3)
+                    except ValueError:
+                        logger.warning(f"⚠️ AI returned invalid date format: {ai_start}")
                 else:
                     logger.debug(f"  🤖 AI解析スキップ: {title[:15]}...")
 
@@ -162,17 +172,26 @@ def fetch_and_sync() -> None:
             logger.error(f"⚠️ データ変換エラー: {e}")
 
     if upsert_data:
-        try:
-            if config.SUPABASE_URL and config.SUPABASE_KEY:
-                supabase = create_client(config.SUPABASE_URL, config.SUPABASE_KEY)
-                supabase.table("schedules").upsert(upsert_data, on_conflict="source_id").execute()
-                logger.info(f"✅ 同期完了！ {len(upsert_data)} 件を保存しました。")
-            else:
-                logger.error("Supabase config failed")
-        except Exception as e:
-            logger.error(f"❌ DB保存エラー: {e}")
+        if dry_run:
+            logger.info(f"[Dry Run] Would upsert {len(upsert_data)} items:")
+            logger.info(json.dumps(upsert_data, indent=2, default=str))
+        else:
+            try:
+                if config.SUPABASE_URL and config.SUPABASE_KEY:
+                    supabase = create_client(config.SUPABASE_URL, config.SUPABASE_KEY)
+                    supabase.table("schedules").upsert(upsert_data, on_conflict="source_id").execute()
+                    logger.info(f"✅ 同期完了！ {len(upsert_data)} 件を保存しました。")
+                else:
+                    logger.error("Supabase config failed")
+            except Exception as e:
+                logger.error(f"❌ DB保存エラー: {e}")
     else:
         logger.warning("⚠️ 保存データなし")
 
 if __name__ == "__main__":
-    fetch_and_sync()
+    parser = argparse.ArgumentParser(description="Scheduler Worker")
+    parser.add_argument("--dry-run", action="store_true", help="Perform a dry run without writing to DB")
+    args = parser.parse_args()
+    
+    fetch_and_sync(dry_run=args.dry_run)
+    sys.exit(0)

@@ -20,6 +20,6 @@ def run() -> None:
     app.run(host='0.0.0.0', port=8080)
 
 def start_server() -> None:
-    t = Thread(target=run)
+    t = Thread(target=run, daemon=True)
     t.start()
     logger.info("🌍 Keep-Alive Server started on port 8080")
