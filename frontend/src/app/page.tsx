@@ -40,10 +40,28 @@ export default function ChatPage() {
     return text.match(urlRegex) || [];
   };
 
-  // Remove URLs from text
-  const removeUrls = (text: string): string => {
+  // Convert URLs in text to clickable links
+  const linkifyText = (text: string) => {
     const urlRegex = /(https?:\/\/[^\s]+)/g;
-    return text.replace(urlRegex, '').trim();
+    const parts = text.split(urlRegex);
+
+    return parts.map((part, index) => {
+      if (part.match(urlRegex)) {
+        return (
+          <a
+            key={index}
+            href={part}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="underline hover:text-cyan-600 transition-colors"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {part}
+          </a>
+        );
+      }
+      return part;
+    });
   };
 
   // Auto-scroll to bottom
@@ -196,7 +214,7 @@ export default function ChatPage() {
                     ? "bg-white/80 border border-white/40 rounded-2xl rounded-bl-none text-slate-700 shadow-sm"
                     : "bg-gradient-to-br from-cyan-400 to-blue-500 text-white rounded-2xl rounded-br-none shadow-lg shadow-cyan-500/20"
                 )}>
-                  {msg.role === 'ai' ? removeUrls(msg.text) : msg.text}
+                  {linkifyText(msg.text)}
                   {msg.isStreaming && <span className="inline-block w-1.5 h-4 ml-1 align-middle bg-cyan-300 animate-pulse" />}
                 </div>
                 {msg.role === 'ai' && extractUrls(msg.text).map((url, idx) => (

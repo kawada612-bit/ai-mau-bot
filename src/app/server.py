@@ -116,16 +116,26 @@ async def ogp_endpoint(req: OGPRequest):
     try:
         ogp_data = await OGPService.fetch_ogp(req.url)
         
+        # If OGP fetch fails, return empty data instead of error
+        # This allows the frontend to gracefully fallback to simple link card
         if ogp_data is None:
-            raise HTTPException(status_code=404, detail="Failed to fetch OGP metadata")
+            logger.warning(f"⚠️ OGP fetch failed for {req.url}, returning empty data")
+            return OGPResponse(
+                title='',
+                description='',
+                image=''
+            )
         
         return OGPResponse(
             title=ogp_data.get('title', ''),
             description=ogp_data.get('description', ''),
             image=ogp_data.get('image', '')
         )
-    except HTTPException:
-        raise
     except Exception as e:
         logger.error(f"❌ OGP API Error: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        # Return empty data instead of error for better UX
+        return OGPResponse(
+            title='',
+            description='',
+            image=''
+        )
