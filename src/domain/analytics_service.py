@@ -23,6 +23,10 @@ Columns:
   - title (text): イベント名
   - start_at (text): 開始日時 (ISO 8601 format: YYYY-MM-DDTHH:MM:SS)
   - description (text): 詳細メモ
+  - place (text): 会場・場所
+  - ticket_url (text): チケット購入URL
+  - price_details (text): 料金詳細 ("Adv 3000 / Door 3500" 等)
+  - bonus (text): 入場特典
 """
 
     def _get_fresh_connection(self):
