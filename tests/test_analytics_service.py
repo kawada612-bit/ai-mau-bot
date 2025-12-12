@@ -8,8 +8,8 @@ def test_get_schema_info(mock_env_vars):
     """Test schema info retrieval"""
     service = AnalyticsService()
     schema = service.get_schema_info()
-    assert "Table: schedules" in schema
-    assert "bonus (text)" in schema
+    assert "CREATE TABLE schedules" in schema
+    assert "bonus TEXT" in schema
 
 def test_execute_query_with_mock_data(mock_env_vars, mock_supabase):
     """Test SQL execution with mock Supabase data"""
