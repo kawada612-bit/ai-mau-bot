@@ -8,6 +8,7 @@ import asyncio
 from src.app import bot
 from src.core import config
 from src.core.logger import setup_logger
+from src.services.ogp_service import OGPService
 
 logger = setup_logger(__name__)
 
@@ -17,6 +18,14 @@ class ChatRequest(BaseModel):
 
 class ChatResponse(BaseModel):
     response: str
+
+class OGPRequest(BaseModel):
+    url: str = Field(..., description="URL to fetch OGP metadata from")
+
+class OGPResponse(BaseModel):
+    title: str
+    description: str
+    image: str
 
 # Global variable to hold the bot task
 bot_task = None
@@ -99,4 +108,24 @@ async def chat_endpoint(req: ChatRequest):
     except Exception as e:
         logger.error(f"❌ API Chat Error: {e}")
         # Return 500 Internal Server Error with detail
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/api/ogp", response_model=OGPResponse)
+async def ogp_endpoint(req: OGPRequest):
+    """Fetch OGP metadata for a given URL."""
+    try:
+        ogp_data = await OGPService.fetch_ogp(req.url)
+        
+        if ogp_data is None:
+            raise HTTPException(status_code=404, detail="Failed to fetch OGP metadata")
+        
+        return OGPResponse(
+            title=ogp_data.get('title', ''),
+            description=ogp_data.get('description', ''),
+            image=ogp_data.get('image', '')
+        )
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"❌ OGP API Error: {e}")
         raise HTTPException(status_code=500, detail=str(e))

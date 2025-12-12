@@ -9,6 +9,8 @@ supabase
 playwright
 python-dateutil
 beautifulsoup4
+lxml
+httpx
 pandas
 tabulate
 pytest
