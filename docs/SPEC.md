@@ -1,8 +1,8 @@
 # 📘 AIまう プロジェクト仕様書
 
 ## 1. システムアーキテクチャ
-**トリプルハイブリッド構成 & インメモリ分析基盤**
-APIの枯渇を防ぐフェイルセーフと、高度な質問に答えるための分析基盤を兼ね備えています。
+**トリプルハイブリッド構成 & インメモリ分析基盤 & Web チャットUI**
+APIの枯渇を防ぐフェイルセーフと、高度な質問に答えるための分析基盤、そしてWebブラウザからアクセス可能なチャットUIを兼ね備えています。
 
 ```mermaid
 graph LR
@@ -10,6 +10,7 @@ graph LR
     classDef default fill:#f9f9f9,stroke:#333,stroke-width:1px;
     classDef user fill:#e1f5fe,stroke:#0288d1,stroke-width:2px,color:#01579b;
     classDef bot fill:#d1c4e9,stroke:#512da8,stroke-width:2px,color:#311b92;
+    classDef frontend fill:#fff3e0,stroke:#f57c00,stroke-width:2px,color:#e65100;
     classDef logicGroup fill:#fffde7,stroke:#fbc02d,stroke-width:2px,color:#f57f17,stroke-dasharray: 5 5;
     classDef ai fill:#c8e6c9,stroke:#388e3c,stroke-width:2px,color:#1b5e20;
     classDef db fill:#ffe0b2,stroke:#f57c00,stroke-width:2px,color:#e65100,shape:cylinder;
@@ -19,15 +20,25 @@ graph LR
 
     %% --- ノード定義 ---
     User("👤 ユーザー"):::user
+    WebUser("🌐 Webユーザー"):::user
     Discord("💬 Discord"):::external
     UptimeRobot("⏱️ UptimeRobot<br>(死活監視)"):::monitor
     
     %% Renderホスティング環境
     subgraph RenderHost ["☁️ Render ホスティング環境 (Free Plan)"]
-        Bot("🤖 AIまう<br>(Bot 本体)"):::bot
+        Bot("🤖 Discord Bot<br>(Bot 本体)"):::bot
+        FastAPI("🚀 FastAPI Server<br>(Web API)"):::bot
         Worker("🔄 Scheduler Worker<br>(定期実行タスク)"):::bot
         Analytics("🧠 Analytics Service<br>(分析モジュール)"):::bot
+        OGP("🔗 OGP Service<br>(メタデータ取得)"):::bot
         SQLite[("📊 In-Memory SQLite<br>(一時DB)")]:::db
+    end
+
+    %% フロントエンド
+    subgraph Frontend ["🎨 Next.js Frontend (Vercel/Render)"]
+        WebUI("💬 Chat UI<br>(React)"):::frontend
+        LinkCard("🎫 Link Card<br>(OGP表示)"):::frontend
+        LocalStorage("💾 LocalStorage<br>(永続化)"):::frontend
     end
 
     %% 外部AIサービス群
@@ -47,14 +58,22 @@ graph LR
     %% 監視
     UptimeRobot -.-> RenderHost
 
-    %% メインエントリー
+    %% Discord経由
     User --> Discord --> Bot
+
+    %% Web経由
+    WebUser --> WebUI
+    WebUI --> FastAPI
+    WebUI --> LocalStorage
+    WebUI --> LinkCard
+    LinkCard --> FastAPI
 
     %% === ロジックフロー ===
 
-    %% 1. 通常会話ロジック
+    %% 1. 通常会話ロジック (Discord)
     subgraph Logic_Brain ["🗣️ 通常会話ロジック (AI Brain)"]
         Bot -->|"① 会話要求"| GeminiMain
+        FastAPI -->|"① 会話要求"| GeminiMain
         GeminiMain -.->|"② エラー/制限時"| GeminiSub
         GeminiSub -.->|"③ エラー/制限時"| GroqAI
     end
@@ -62,11 +81,13 @@ graph LR
     %% 2. データ分析ロジック
     subgraph Logic_Analysis ["📈 データ分析ロジック (High-IQ)"]
         Bot -->|"①「分析して」等"| Analytics
+        FastAPI -->|"①「分析して」等"| Analytics
         Analytics -->|"② データロード"| DB
         Analytics -->|"③ 一時DB作成"| SQLite
         Analytics -->|"④ SQL生成要求"| GeminiMain
         GeminiMain -->|"⑤ SQL実行"| SQLite
         SQLite -->|"⑥ 結果データ返却"| Bot
+        SQLite -->|"⑥ 結果データ返却"| FastAPI
     end
 
     %% 3. データ同期ロジック
@@ -76,8 +97,16 @@ graph LR
         GroqWorker -->|"③ 構造化データ保存"| DB
     end
 
+    %% 4. OGP取得ロジック
+    subgraph Logic_OGP ["🔗 OGP取得ロジック"]
+        FastAPI -->|"① URL受信"| OGP
+        OGP -->|"② メタデータ返却"| FastAPI
+    end
+
     %% サブグラフのスタイル適用
-    class Logic_Brain,Logic_Analysis,Logic_Sync logicGroup;
+    class Logic_Brain,Logic_Analysis,Logic_Sync,Logic_OGP logicGroup;
+```
+
 ```
 
 ## 2. 会話・挙動ロジック
@@ -111,18 +140,32 @@ graph LR
 
 ## 3. ファイル構成 (Modular Monolith)
 
-| ディレクトリ   | ファイル名             | 役割                                         |
-| :------------- | :--------------------- | :------------------------------------------- |
-| `src/app/`     | `main.py`              | エントリーポイント。                         |
-|                | `bot.py`               | Discord Bot本体。メッセージ受信・応答制御。  |
-|                | `server.py`            | UptimeRobot用サーバー (Keep-Alive)。         |
-| `src/domain/`  | `ai_service.py`        | AI推論ロジック (Gemini / Groq)。             |
-|                | `analytics_service.py` | **(New)** AIによるSQL分析・実行サービス。    |
-|                | `persona.py`           | AIへのシステムプロンプト定義。               |
-| `src/workers/` | `scheduler.py`         | TimeTree同期ワーカー（AI補正・DryRun対応）。 |
-|                | `fetcher.py`           | 過去ログ取得用スクリプト。                   |
-| `src/core/`    | `config.py`            | 環境変数と定数管理。                         |
-|                | `logger.py`            | ロギング設定。                               |
+### バックエンド
+
+| ディレクトリ    | ファイル名             | 役割                                          |
+| :-------------- | :--------------------- | :-------------------------------------------- |
+| `src/app/`      | `main.py`              | エントリーポイント。                          |
+|                 | `bot.py`               | Discord Bot本体。メッセージ受信・応答制御。   |
+|                 | `server.py`            | FastAPI サーバー。Web API & Discord Bot統合。 |
+| `src/domain/`   | `ai_service.py`        | AI推論ロジック (Gemini / Groq)。              |
+|                 | `analytics_service.py` | AIによるSQL分析・実行サービス。               |
+|                 | `persona.py`           | AIへのシステムプロンプト定義。                |
+| `src/services/` | `ogp_service.py`       | OGPメタデータ取得サービス。                   |
+| `src/workers/`  | `scheduler.py`         | TimeTree同期ワーカー（AI補正・DryRun対応）。  |
+|                 | `fetcher.py`           | 過去ログ取得用スクリプト。                    |
+| `src/core/`     | `config.py`            | 環境変数と定数管理。                          |
+|                 | `logger.py`            | ロギング設定。                                |
+
+### フロントエンド
+
+| ディレクトリ               | ファイル名             | 役割                            |
+| :------------------------- | :--------------------- | :------------------------------ |
+| `frontend/src/app/`        | `page.tsx`             | メインチャットページ。          |
+|                            | `layout.tsx`           | ルートレイアウト。              |
+|                            | `globals.css`          | グローバルスタイル。            |
+| `frontend/src/components/` | `link-card.tsx`        | OGPリンクカードコンポーネント。 |
+| `frontend/src/hooks/`      | `use-local-storage.ts` | LocalStorage永続化フック。      |
+| `frontend/src/lib/`        | `utils.ts`             | ユーティリティ関数。            |
 
 ## 4. 管理情報 (Service Stack)
 

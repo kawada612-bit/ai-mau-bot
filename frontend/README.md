@@ -1,36 +1,190 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# 🩵 AIまう フロントエンド
 
-## Getting Started
+Next.js 16 (App Router) を使用した、AIまうとチャットできるWebアプリケーションです。
 
-First, run the development server:
+## ✨ 主な機能
 
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+### 💬 リアルタイムチャット
+- **疑似ストリーミング表示**: AIの応答を1文字ずつアニメーション表示
+- **タイピングインジケーター**: AI思考中の視覚的フィードバック
+- **自動スクロール**: 新しいメッセージに自動追従
+
+### 💾 永続化機能
+- **会話履歴の保存**: LocalStorageを使用してページリロード後も会話を保持
+- **ユーザー名のカスタマイズ**: 名前を設定・変更可能（自動保存）
+- **長期コンテキスト**: 最大12件の会話履歴をAPIに送信
+
+### 🎨 リッチUI
+- **モダンデザイン**: グラスモーフィズム、グラデーション、アニメーション
+- **レスポンシブ**: モバイル・デスクトップ対応
+- **OGPリンクカード**: URLを含むメッセージでリッチカードを自動表示
+
+## 🛠️ 技術スタック
+
+- **フレームワーク**: Next.js 16 (App Router, Turbopack)
+- **言語**: TypeScript
+- **スタイリング**: Tailwind CSS + Custom CSS
+- **アニメーション**: Framer Motion
+- **アイコン**: Lucide React
+- **状態管理**: React Hooks + Custom Hooks
+
+## 🚀 セットアップ
+
+### 環境変数の設定
+
+`.env.local` ファイルを作成し、以下を設定してください：
+
+```env
+NEXT_PUBLIC_API_URL=http://localhost:8000
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+本番環境では、バックエンドAPIのURLを設定してください。
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+### インストール & 起動
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+```bash
+# 依存関係のインストール
+npm install
 
-## Learn More
+# 開発サーバー起動
+npm run dev
 
-To learn more about Next.js, take a look at the following resources:
+# ブラウザで http://localhost:3000 を開く
+```
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+### ビルド
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+```bash
+# 本番ビルド
+npm run build
 
-## Deploy on Vercel
+# 本番サーバー起動
+npm start
+```
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+## 📁 ディレクトリ構成
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+```
+frontend/
+├── src/
+│   ├── app/                    # Next.js App Router
+│   │   ├── page.tsx           # メインチャットページ
+│   │   ├── layout.tsx         # ルートレイアウト
+│   │   └── globals.css        # グローバルスタイル
+│   ├── components/            # Reactコンポーネント
+│   │   └── link-card.tsx      # OGPリンクカード
+│   ├── hooks/                 # カスタムフック
+│   │   └── use-local-storage.ts  # LocalStorage永続化フック
+│   └── lib/                   # ユーティリティ
+│       └── utils.ts           # ヘルパー関数
+├── public/                    # 静的ファイル
+└── package.json              # 依存関係
+```
+
+## 🎨 主要コンポーネント
+
+### `page.tsx`
+メインのチャットインターフェース。以下の機能を含みます：
+- メッセージ送受信
+- 会話履歴管理
+- ユーザー名管理
+- URL検出とリンクカード表示
+
+### `link-card.tsx`
+OGP（Open Graph Protocol）を使用したリッチリンクカード：
+- バックエンドAPIからOGPメタデータを取得
+- 画像、タイトル、説明を表示
+- ローディング状態とエラーハンドリング
+
+### `use-local-storage.ts`
+LocalStorageと同期する状態管理フック：
+- SSR対応（Hydration Mismatch回避）
+- 型安全な状態管理
+- 自動シリアライズ/デシリアライズ
+
+## 🔌 API連携
+
+### `/api/chat` (POST)
+チャットメッセージを送信し、AIの応答を取得します。
+
+**リクエスト:**
+```json
+{
+  "text": "こんにちは",
+  "user_name": "ユーザー名",
+  "history": [
+    { "role": "user", "text": "前のメッセージ" },
+    { "role": "ai", "text": "前の応答" }
+  ]
+}
+```
+
+**レスポンス:**
+```json
+{
+  "response": "やほす〜！元気してた？✨"
+}
+```
+
+### `/api/ogp` (POST)
+URLからOGPメタデータを取得します。
+
+**リクエスト:**
+```json
+{
+  "url": "https://example.com"
+}
+```
+
+**レスポンス:**
+```json
+{
+  "title": "ページタイトル",
+  "description": "ページの説明",
+  "image": "https://example.com/image.jpg"
+}
+```
+
+## 🎨 デザインシステム
+
+### カラーパレット
+- **プライマリ**: Cyan (400-500)
+- **アクセント**: Blue (400-500)
+- **背景**: Sky (50-100)
+- **テキスト**: Slate (600-800)
+
+### アニメーション
+- **メッセージ出現**: Spring animation (Framer Motion)
+- **タイピング**: Bounce animation
+- **ホバー**: Scale & Color transitions
+
+## 📝 開発ガイド
+
+### カスタムフックの追加
+`src/hooks/` ディレクトリに新しいフックを追加できます。
+
+### コンポーネントの追加
+`src/components/` ディレクトリに新しいコンポーネントを追加できます。
+
+### スタイルのカスタマイズ
+`src/app/globals.css` でグローバルスタイルとカスタムCSSクラスを定義できます。
+
+## 🚀 デプロイ
+
+### Vercel (推奨)
+```bash
+# Vercel CLIでデプロイ
+npm i -g vercel
+vercel
+```
+
+### その他のプラットフォーム
+Next.js 16はNode.js 18.18以降が必要です。
+環境変数 `NEXT_PUBLIC_API_URL` を本番APIのURLに設定してください。
+
+## 📚 参考リンク
+
+- [Next.js Documentation](https://nextjs.org/docs)
+- [Tailwind CSS](https://tailwindcss.com/docs)
+- [Framer Motion](https://www.framer.com/motion/)
+- [Lucide Icons](https://lucide.dev/)
