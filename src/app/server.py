@@ -1,8 +1,11 @@
 
 from contextlib import asynccontextmanager
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
+from slowapi import Limiter, _rate_limit_exceeded_handler
+from slowapi.util import get_remote_address
+from slowapi.errors import RateLimitExceeded
 import asyncio
 
 from src.app import bot
@@ -13,8 +16,8 @@ from src.services.ogp_service import OGPService
 logger = setup_logger(__name__)
 
 class ChatRequest(BaseModel):
-    text: str = Field(..., min_length=1, description="Message text cannot be empty")
-    user_name: str = "Guest"
+    text: str = Field(..., min_length=1, max_length=500, description="Message text (1-500 chars)")
+    user_name: str = Field(default="Guest", max_length=50, description="User name (max 50 chars)")
 
 class ChatResponse(BaseModel):
     response: str
@@ -57,9 +60,15 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(title="AI Mau API", lifespan=lifespan)
 
+# Rate Limiter Setup
+limiter = Limiter(key_func=get_remote_address)
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
+
+# CORS Configuration
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=config.ALLOWED_ORIGINS,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -70,7 +79,8 @@ def health_check():
     return {"status": "ok"}
 
 @app.post("/api/chat", response_model=ChatResponse)
-async def chat_endpoint(req: ChatRequest):
+@limiter.limit("10/minute")
+async def chat_endpoint(request: Request, req: ChatRequest):
     try:
         # Construct a simple conversation log for the AI
         conversation_log = f"{req.user_name}: {req.text}"
