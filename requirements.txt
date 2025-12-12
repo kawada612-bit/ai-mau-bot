@@ -9,3 +9,5 @@ python-dateutil
 beautifulsoup4
 pandas
 tabulate
+pytest
+pytest-asyncio
