@@ -64,7 +64,8 @@ class AIBrain:
         3. For "today" or relative dates, use SQLite functions like `date('now', 'localtime')` or `datetime('now', 'localtime')`.
            Example: `WHERE start_at >= date('now', 'localtime')`
         4. If the question implies "how many", use `COUNT(*)`.
-        5. If the question implies "list" or "schedule", include `title` and `start_at`.
+        5. If the question implies "list" or "schedule", prefer `SELECT *` or explicitly select `title`, `start_at`, `place`, `price_details`, `ticket_url`, and `bonus`.
+
         """
         
         # Try Groq (Llama 3) first
@@ -122,7 +123,12 @@ class AIBrain:
         3. **相手が英語で話しかけてきた場合は英語で、日本語なら日本語で返信してください。**
            (If the user speaks English, reply in English with the same idol personality.)
         4. 親しい友達のようにタメ口で返信してください。
-        5. **返信は「200文字以内」で、Twitterのリプライのように短くテンポよく返してください。長々とした挨拶は省略してOKです。**
+        5. **返信は基本「200文字以内」で短く返してください。ただし、ライブの告知やスケジュール詳細を伝える場合は、情報が漏れないように文字数制限を無視して長くなっても構いません。**
+
+        【回答のルール (スケジュール)】
+        1. **詳細情報**: 可能な限り「場所 (Place)」と「金額 (Price)」も案内すること。
+        2. **特典 (Bonus)**: もし「特典 (bonus)」があるイベントなら、**「この日は〇〇の特典があるから絶対来てほしい！」と優先的にアピール** すること。（絵文字 🎁✨ を使うなど強調して）
+        3. **誘導**: チケットURLがある場合は、お誘いすること。
         """
 
         response_text = ""
