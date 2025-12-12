@@ -1,6 +1,8 @@
 discord.py
 google-generativeai>=0.8.3
-flask
+fastapi
+uvicorn
+pydantic
 python-dotenv
 groq
 supabase
