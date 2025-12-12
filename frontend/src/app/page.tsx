@@ -46,37 +46,48 @@ export default function ChatPage() {
     setMessages((prev) => [...prev, userMsg]);
     setIsTyping(true);
 
-    // 2. Mock AI Delay & Response (API連携までの仮ロジック)
-    setTimeout(() => {
-      setIsTyping(false);
-      const aiMsgId = (Date.now() + 1).toString();
-      const responseText = "ありがと〜！✨ まうも大好きだよ！(っ ॑꒳ ॑c)\n（※これはテスト返信だよ！）";
+    // 2. Call Backend API
+    try {
+      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/chat`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ text: userText, user_name: "Guest" }),
+      });
 
-      // Initial empty message for streaming effect
+      if (!res.ok) throw new Error('API Error');
+      const data = await res.json();
+      const aiText = data.response; // Get actual text from API
+
+      // --- Start Pseudo-Streaming Logic (Reuse existing structure) ---
+      const aiMsgId = (Date.now() + 1).toString();
+
       setMessages((prev) => [
         ...prev,
         { id: aiMsgId, role: 'ai', text: '', isStreaming: true },
       ]);
 
-      // Stream text character by character
       let i = 0;
       const interval = setInterval(() => {
         setMessages((prev) =>
           prev.map((msg) =>
-            msg.id === aiMsgId
-              ? { ...msg, text: responseText.slice(0, i + 1) }
-              : msg
+            msg.id === aiMsgId ? { ...msg, text: aiText.slice(0, i + 1) } : msg
           )
         );
         i++;
-        if (i >= responseText.length) {
+        if (i >= aiText.length) {
           clearInterval(interval);
           setMessages((prev) =>
             prev.map((msg) => (msg.id === aiMsgId ? { ...msg, isStreaming: false } : msg))
           );
         }
       }, 30);
-    }, 1500);
+      // -----------------------------------------------------------
+
+    } catch (error) {
+      setMessages(prev => [...prev, { id: Date.now().toString(), role: 'ai', text: 'ごめんね、ちょっと調子悪いみたい… (通信エラー) 😵‍💫' }]);
+    } finally {
+      setIsTyping(false);
+    }
   };
 
   const handleKeyDown = (e: React.KeyboardEvent) => {

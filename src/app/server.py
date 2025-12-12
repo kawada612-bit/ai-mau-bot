@@ -66,10 +66,33 @@ async def chat_endpoint(req: ChatRequest):
         # Construct a simple conversation log for the AI
         conversation_log = f"{req.user_name}: {req.text}"
         
+        # ---------------------------------------------------
+        # 🤖 High-IQ Analytics Flow (Same as Discord Bot)
+        # ---------------------------------------------------
+        ANALYTICS_KEYWORDS = ['いつ', '予定', 'スケジュール', 'ライブ', 'イベント', '何回', '件数', '分析', '教えて']
+        context_info = None
+        
+        if any(k in req.text for k in ANALYTICS_KEYWORDS):
+            logger.info("🧠 Analytics Keyword Detected in API. Generating SQL...")
+            try:
+                # Reuse the same brain and analytics instance from bot module
+                sql = await bot.brain.generate_sql(req.text, bot.analytics.get_schema_info())
+                result_md = bot.analytics.execute_query(sql)
+                context_info = result_md
+                logger.info("📊 Analysis Result: " + str(context_info)[:50] + "...")
+            except Exception as e:
+                logger.error(f"Analytics Error: {e}")
+
         # Generate response using the existing bot brain
-        response_text = await bot.brain.generate_response(
-            req.user_name, 
-            conversation_log
+        # response_text = await bot.brain.generate_response(
+        #     req.user_name, 
+        #     conversation_log
+        # )
+        
+        # 30秒タイムアウト設定 (bot.pyと同様)
+        response_text = await asyncio.wait_for(
+            bot.brain.generate_response(req.user_name, conversation_log, context_info),
+            timeout=30.0
         )
         
         return ChatResponse(response=response_text)
