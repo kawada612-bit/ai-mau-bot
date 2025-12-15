@@ -198,13 +198,16 @@ export default function ChatPage() {
       const history = messages.slice(-12).map(m => ({ role: m.role, text: m.text }));
 
       const startTime = Date.now();
+      const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+
       const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/chat`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           text: userText,
           user_name: userName,
-          history: history
+          history: history,
+          timezone: timezone
         }),
       });
 

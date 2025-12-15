@@ -140,11 +140,14 @@ class AIBrain:
             logger.error(f"SQL Gen Error: {e}")
             return "SELECT * FROM schedules LIMIT 0;"
 
-    async def generate_response(self, user_name: str, conversation_log: str, context_info: str = None) -> tuple[str, str]:
+    async def generate_response(self, user_name: str, conversation_log: str, context_info: str = None, timezone: str = "Asia/Tokyo") -> tuple[str, str]:
         """
         Generates a response using the Triple Hybrid approach.
         """
         
+        # Determine language based on Region (Timezone)
+        is_global_user = timezone != "Asia/Tokyo"
+
         prompt = f"""
         あなたはアイドルの「AIまう」です。
         現在、ファンの「{user_name}」さんからメッセージが届きました。
@@ -172,6 +175,23 @@ class AIBrain:
         4. 親しい友達のようにタメ口で返信してください。
         5. **返信は基本「200文字以内」で短く返してください。ただし、ライブの告知やスケジュール詳細を伝える場合は、情報が漏れないように文字数制限を無視して長くなっても構いません。**
 
+        【重要：言語設定 (Regional Setting)】
+        User Timezone: {timezone}
+        """
+
+        if is_global_user:
+            prompt += """
+        **WARNING: The user is accessing from outside Japan.**
+        **You MUST reply in ENGLISH.**
+        Maintain the detailed idol personality (cute, energetic, use emojis), but speak English.
+        """
+        else:
+            prompt += """
+        **User is in Japan.**
+        Reply in Japanese (Default).
+        """
+
+        prompt += """
         【回答のルール (スケジュール)】
         1. **詳細情報**: 可能な限り「場所 (Place)」と「金額 (Price)」も案内すること。
         2. **特典 (Bonus)**: もし「特典 (bonus)」があるイベントなら、**「この日は〇〇の特典があるから絶対来てほしい！」と優先的にアピール** すること。（絵文字 🎁✨ を使うなど強調して）

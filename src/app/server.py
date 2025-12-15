@@ -28,10 +28,12 @@ class ChatRequest(BaseModel):
     text: str = Field(..., min_length=1, max_length=500, description="Message text (1-500 chars)")
     user_name: str = Field(default="Guest", max_length=50, description="User name (max 50 chars)")
     history: list[MessageHistory] = Field(default=[], description="Recent conversation history (up to 12 messages)")
+    timezone: str = Field(default="Asia/Tokyo", description="User's timezone (e.g. Asia/Tokyo)")
 
 class ChatResponse(BaseModel):
     response: str
     mode: str = Field(default="unknown", description="The mode/model used for generation (reflex, genius, speed, main, backup)")
+
 
 class OGPRequest(BaseModel):
     url: str = Field(..., description="URL to fetch OGP metadata from")
@@ -189,7 +191,7 @@ async def chat_endpoint(request: Request, req: ChatRequest):
         # Observing logs from ai_service: "📨 返信モデル: {used_model}"
         
         response_text, mode = await asyncio.wait_for(
-            bot.brain.generate_response(req.user_name, conversation_log, context_info),
+            bot.brain.generate_response(req.user_name, conversation_log, context_info, req.timezone),
             timeout=30.0
         )
         
