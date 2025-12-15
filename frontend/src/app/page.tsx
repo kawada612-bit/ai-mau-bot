@@ -34,6 +34,7 @@ export default function ChatPage() {
   const [isTyping, setIsTyping] = useState(false);
   const [isNameModalOpen, setIsNameModalOpen] = useState(false);
   const [isClearModalOpen, setIsClearModalOpen] = useState(false);
+  const [currentMode, setCurrentMode] = useState<string>('MAIN');
 
   // Suggestions Logic
   const FIXED_SUGGESTIONS = ["次のライブいつ？", "自己紹介して！"];
@@ -210,6 +211,8 @@ export default function ChatPage() {
       if (!res.ok) throw new Error('API Error');
       const data = await res.json();
       const aiText = data.response; // Get actual text from API
+      const aiMode = data.mode;
+      if (aiMode) setCurrentMode(aiMode);
       const responseTime = (Date.now() - startTime) / 1000;
 
       // Send GA Event: Response Received
@@ -261,6 +264,17 @@ export default function ChatPage() {
     }
   };
 
+  const getModeLabel = (mode: string) => {
+    switch (mode) {
+      case 'REFLEX': return '⚡ リフレックスモード';
+      case 'GENIUS': return '✨ 天才モード';
+      case 'SPEED': return '🚀 高速モード';
+      case 'MAIN': return '🐎 メインモード';
+      case 'BACKUP': return '🛡️ バックアップモード';
+      default: return 'Always with you';
+    }
+  };
+
   return (
     <div className="relative h-[100dvh] flex flex-col overflow-hidden text-slate-700 bg-[#F0F9FF] selection:bg-cyan-200/50">
       {/* Background Blobs */}
@@ -281,7 +295,7 @@ export default function ChatPage() {
             </div>
             <div>
               <h1 className="font-bold text-lg leading-tight tracking-tight text-slate-700">AIまう</h1>
-              <p className="text-xs text-theme-primary font-medium tracking-wide">Always with you</p>
+              <p className="text-xs text-theme-primary font-medium tracking-wide">{getModeLabel(currentMode)}</p>
             </div>
           </div>
           <div className="flex items-center space-x-1">

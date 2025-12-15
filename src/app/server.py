@@ -20,12 +20,18 @@ from src.services.ogp_service import OGPService
 
 logger = setup_logger(__name__)
 
+class MessageHistory(BaseModel):
+    role: str = Field(..., description="Message role: 'user' or 'ai'")
+    text: str = Field(..., description="Message text")
+
 class ChatRequest(BaseModel):
     text: str = Field(..., min_length=1, max_length=500, description="Message text (1-500 chars)")
     user_name: str = Field(default="Guest", max_length=50, description="User name (max 50 chars)")
+    history: list[MessageHistory] = Field(default=[], description="Recent conversation history (up to 12 messages)")
 
 class ChatResponse(BaseModel):
     response: str
+    mode: str = Field(default="unknown", description="The mode/model used for generation (reflex, genius, speed, main, backup)")
 
 class OGPRequest(BaseModel):
     url: str = Field(..., description="URL to fetch OGP metadata from")
@@ -132,6 +138,21 @@ def root():
 def health_check():
     return {"status": "ok"}
 
+def build_conversation_log(user_name: str, history: list[MessageHistory], current_text: str) -> str:
+    """会話履歴を整形してAIに渡す形式に変換"""
+    log_lines = []
+    
+    for msg in history:
+        if msg.role == 'user':
+            log_lines.append(f"{user_name}: {msg.text}")
+        else:
+            log_lines.append(f"AIまう: {msg.text}")
+    
+    # 現在のメッセージを追加
+    log_lines.append(f"{user_name}: {current_text}")
+    
+    return "\n".join(log_lines)
+
 @app.post("/api/chat", response_model=ChatResponse)
 @limiter.limit("10/minute")
 async def chat_endpoint(request: Request, req: ChatRequest):
@@ -140,8 +161,9 @@ async def chat_endpoint(request: Request, req: ChatRequest):
     error_msg = None
     
     try:
-        # Construct a simple conversation log for the AI
-        conversation_log = f"{req.user_name}: {req.text}"
+        # Build conversation log from history
+        conversation_log = build_conversation_log(req.user_name, req.history, req.text)
+        logger.info(f"📝 Conversation history: {len(req.history)} messages")
         
         # ---------------------------------------------------
         # 🤖 High-IQ Analytics Flow (Same as Discord Bot)
@@ -166,12 +188,12 @@ async def chat_endpoint(request: Request, req: ChatRequest):
         # Ideally, we should refactor generate_response to return metadata.
         # Observing logs from ai_service: "📨 返信モデル: {used_model}"
         
-        response_text = await asyncio.wait_for(
+        response_text, mode = await asyncio.wait_for(
             bot.brain.generate_response(req.user_name, conversation_log, context_info),
             timeout=30.0
         )
         
-        return ChatResponse(response=response_text)
+        return ChatResponse(response=response_text, mode=mode)
     except Exception as e:
         error_msg = str(e)
         logger.error(f"❌ API Chat Error: {e}")
