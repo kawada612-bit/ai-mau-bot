@@ -7,6 +7,8 @@ from slowapi import Limiter, _rate_limit_exceeded_handler
 from slowapi.util import get_remote_address
 from slowapi.errors import RateLimitExceeded
 import asyncio
+import httpx
+import os
 
 from src.app import bot
 from src.core import config
@@ -30,12 +32,45 @@ class OGPResponse(BaseModel):
     description: str
     image: str
 
-# Global variable to hold the bot task
+# Global variables to hold tasks
 bot_task = None
+self_ping_task = None
+
+async def self_ping():
+    """自己Ping機能: 15分ごとに自分自身にアクセスしてスリープを防ぐ"""
+    # RENDER環境でのみ動作（ローカル開発では不要）
+    if not os.getenv("RENDER"):
+        logger.info("⏭️ Self-ping disabled (not in RENDER environment)")
+        return
+    
+    # RenderのサービスURLを取得
+    render_external_url = os.getenv("RENDER_EXTERNAL_URL")
+    if not render_external_url:
+        logger.warning("⚠️ RENDER_EXTERNAL_URL not found, self-ping disabled")
+        return
+    
+    health_url = f"{render_external_url}/health"
+    logger.info(f"🏓 Self-ping enabled: {health_url}")
+    
+    await asyncio.sleep(60)  # 起動後1分待機
+    
+    async with httpx.AsyncClient(timeout=10.0) as client:
+        while True:
+            try:
+                response = await client.get(health_url)
+                if response.status_code == 200:
+                    logger.info("✅ Self-ping successful")
+                else:
+                    logger.warning(f"⚠️ Self-ping returned {response.status_code}")
+            except Exception as e:
+                logger.error(f"❌ Self-ping failed: {e}")
+            
+            # 14分待機（15分より少し短めに設定）
+            await asyncio.sleep(14 * 60)
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    global bot_task
+    global bot_task, self_ping_task
     # Startup
     logger.info("🚀 Starting Discord Bot via FastAPI lifespan...")
     if config.DISCORD_TOKEN:
@@ -44,6 +79,10 @@ async def lifespan(app: FastAPI):
     else:
         logger.error("❌ DISCORD_TOKEN is missing!")
     
+    # Start self-ping task
+    logger.info("🏓 Starting self-ping task...")
+    self_ping_task = asyncio.create_task(self_ping())
+    
     yield
     
     # Shutdown
@@ -51,7 +90,15 @@ async def lifespan(app: FastAPI):
     if bot.client:
         await bot.client.close()
     
-    # Wait for the task to finish if needed (optional)
+    # Cancel self-ping task
+    if self_ping_task:
+        self_ping_task.cancel()
+        try:
+            await self_ping_task
+        except asyncio.CancelledError:
+            pass
+    
+    # Wait for the bot task to finish if needed (optional)
     if bot_task:
         try:
             await bot_task

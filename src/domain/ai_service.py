@@ -141,64 +141,65 @@ class AIBrain:
         """
 
         response_text = ""
-        used_model = "Gemini 2.5" # For logging
+        used_model = "Groq Llama 3" # For logging
         footer_note = "" # Annotation for user
 
         try:
             # ---------------------------------------------------
-            # ① Gemini 2.5 Flash (Main)
+            # ① Groq Llama 3 (Main - Priority)
             # ---------------------------------------------------
-            if not self.model_priority:
-                 raise Exception("Gemini API Key missing")
+            if not self.groq_client:
+                raise Exception("Groq API Key missing")
 
-            logger.info(f"✨ 1. Gemini 2.5 Flash で挑戦中...")
-            response = await self.model_priority.generate_content_async(prompt)
-            response_text = response.text
+            logger.info(f"🔥 1. Groq (Llama 3) で挑戦中...")
+            # Call Groq API
+            completion = self.groq_client.chat.completions.create(
+                model="llama-3.3-70b-versatile", # High performance model
+                messages=[
+                    # Inject system setting
+                    {"role": "system", "content": CHARACTER_SETTING},
+                    {"role": "user", "content": prompt}
+                ],
+                temperature=0.7,
+                max_tokens=1024,
+            )
+            response_text = completion.choices[0].message.content or ""
+            logger.info("✅ Groqで生成成功！")
         
         except Exception as e1:
-            logger.warning(f"⚠️ Gemini 2.5 エラー: {e1}")
+            logger.warning(f"⚠️ Groq Llama 3 エラー: {e1}")
             try:
                 # ---------------------------------------------------
-                # ② Gemini 2.5 Flash Lite (Backup)
+                # ② Gemini 2.5 Flash (Backup 1)
                 # ---------------------------------------------------
-                if not self.model_backup_1:
+                if not self.model_priority:
                      raise Exception("Gemini API Key missing")
 
-                logger.info("♻️ 2. Gemini 2.5 Lite に切り替えます...")
-                response = await self.model_backup_1.generate_content_async(prompt)
+                logger.info("✨ 2. Gemini 2.5 Flash に切り替えます...")
+                response = await self.model_priority.generate_content_async(prompt)
                 response_text = response.text
-                used_model = "Gemini Lite"
-                footer_note = "\n\n(※省エネモード🔋)"
+                used_model = "Gemini 2.5"
+                footer_note = "\n\n(※バックアップモード🔄)"
                 
             except Exception as e2:
-                logger.warning(f"⚠️ Gemini Lite エラー: {e2}")
+                logger.warning(f"⚠️ Gemini 2.5 エラー: {e2}")
                 # ---------------------------------------------------
-                # ③ Groq Llama 3 (Fallback)
+                # ③ Gemini 2.5 Flash Lite (Backup 2)
                 # ---------------------------------------------------
-                if self.groq_client:
-                    logger.info("🔥 3. Groq (Llama 3) 出動！！")
+                if self.model_backup_1:
+                    logger.info("♻️ 3. Gemini 2.5 Lite 出動！！")
                     try:
-                        # Call Groq API
-                        completion = self.groq_client.chat.completions.create(
-                            model="llama-3.3-70b-versatile", # High performance model
-                            messages=[
-                                # Inject system setting
-                                {"role": "system", "content": CHARACTER_SETTING},
-                                {"role": "user", "content": prompt}
-                            ],
-                            temperature=0.7,
-                            max_tokens=1024,
-                        )
-                        response_text = completion.choices[0].message.content or ""
-                        used_model = "Groq Llama 3"
-                        footer_note = "\n\n(※規制モード🚀)"
-                        logger.info("✅ Groqで生成成功！")
+                        response = await self.model_backup_1.generate_content_async(prompt)
+                        response_text = response.text
+                        used_model = "Gemini Lite"
+                        footer_note = "\n\n(※省エネモード🔋)"
+                        logger.info("✅ Gemini Liteで生成成功！")
                         
                     except Exception as e3:
-                        logger.error(f"❌ Groqもエラー: {e3}")
+                        logger.error(f"❌ Gemini Liteもエラー: {e3}")
                         response_text = "ごめんね、今日は回線が全部パンクしちゃったみたい😵‍💫💦 また明日遊ぼうね！"
                 else:
-                    response_text = "ごめんね、ちょっと調子悪いみたい…💦 (Groqキー未設定)"
+                    response_text = "ごめんね、ちょっと調子悪いみたい…💦 (Geminiキー未設定)"
 
         logger.info(f"📨 返信モデル: {used_model}")
         
