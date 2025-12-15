@@ -8,6 +8,8 @@ import { cn } from '@/lib/utils';
 import { useLocalStorage } from '@/hooks/use-local-storage';
 import { LinkCard } from '@/components/link-card';
 
+import { NameModal } from '@/components/name-modal';
+
 type Message = {
   id: string;
   role: 'user' | 'ai';
@@ -20,19 +22,28 @@ export default function ChatPage() {
     {
       id: 'welcome',
       role: 'ai',
-      text: 'やほす〜！☀️\n今日も会いに来てくれてありがとう！なんかいいことあった？✨',
+      text: 'やほす〜！☀️\n今日も会いに来てくれてありがとう！なんかいいことあった？✨\n\n⚠️ お知らせ: チャットは1分間に10通まで送れます。',
     },
   ]);
   const [userName, setUserName, isUserLoaded] = useLocalStorage<string>('mau_user_name', 'Guest');
   const [inputValue, setInputValue] = useState('');
   const [isTyping, setIsTyping] = useState(false);
+  const [isNameModalOpen, setIsNameModalOpen] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
 
-  const handleRename = () => {
-    const newName = prompt("お名前を教えてね！", userName);
-    if (newName && newName.trim()) {
-      setUserName(newName.trim());
+  useEffect(() => {
+    if (isUserLoaded && userName === 'Guest') {
+      setIsNameModalOpen(true);
     }
+  }, [isUserLoaded, userName]);
+
+  const handleRename = () => {
+    setIsNameModalOpen(true);
+  };
+
+  const handleNameSave = (newName: string) => {
+    setUserName(newName);
+    setIsNameModalOpen(false);
   };
 
   // Extract URLs from text
@@ -294,6 +305,11 @@ export default function ChatPage() {
           </button>
         </div>
       </div>
+      <NameModal
+        isOpen={isNameModalOpen}
+        onSave={handleNameSave}
+        currentName={userName}
+      />
     </div>
   );
 }

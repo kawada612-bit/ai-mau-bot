@@ -124,6 +124,10 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+@app.get("/")
+def root():
+    return {"message": "AI Mau Bot API is running", "docs": "/docs"}
+
 @app.get("/health")
 def health_check():
     return {"status": "ok"}

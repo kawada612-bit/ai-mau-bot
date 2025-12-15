@@ -14,8 +14,8 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "AI Mau | アイドルAIチャット",
-  description: "リアルなアイドルAI「まう」とチャットしよう！Next.js & Gemini/Llama搭載。",
+  title: "AI Mau | リアルアイドルチャット",
+  description: "AIアイドル「まう」と楽しくお話ししよう！",
 };
 
 export default function RootLayout({
