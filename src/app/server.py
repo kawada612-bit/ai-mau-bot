@@ -7,6 +7,11 @@ from slowapi import Limiter, _rate_limit_exceeded_handler
 from slowapi.util import get_remote_address
 from slowapi.errors import RateLimitExceeded
 import asyncio
+import httpx
+import os
+import json
+import time
+from datetime import datetime
 
 from src.app import bot
 from src.core import config
@@ -30,12 +35,45 @@ class OGPResponse(BaseModel):
     description: str
     image: str
 
-# Global variable to hold the bot task
+# Global variables to hold tasks
 bot_task = None
+self_ping_task = None
+
+async def self_ping():
+    """自己Ping機能: 15分ごとに自分自身にアクセスしてスリープを防ぐ"""
+    # RENDER環境でのみ動作（ローカル開発では不要）
+    if not os.getenv("RENDER"):
+        logger.info("⏭️ Self-ping disabled (not in RENDER environment)")
+        return
+    
+    # RenderのサービスURLを取得
+    render_external_url = os.getenv("RENDER_EXTERNAL_URL")
+    if not render_external_url:
+        logger.warning("⚠️ RENDER_EXTERNAL_URL not found, self-ping disabled")
+        return
+    
+    health_url = f"{render_external_url}/health"
+    logger.info(f"🏓 Self-ping enabled: {health_url}")
+    
+    await asyncio.sleep(60)  # 起動後1分待機
+    
+    async with httpx.AsyncClient(timeout=10.0) as client:
+        while True:
+            try:
+                response = await client.get(health_url)
+                if response.status_code == 200:
+                    logger.info("✅ Self-ping successful")
+                else:
+                    logger.warning(f"⚠️ Self-ping returned {response.status_code}")
+            except Exception as e:
+                logger.error(f"❌ Self-ping failed: {e}")
+            
+            # 14分待機（15分より少し短めに設定）
+            await asyncio.sleep(14 * 60)
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    global bot_task
+    global bot_task, self_ping_task
     # Startup
     logger.info("🚀 Starting Discord Bot via FastAPI lifespan...")
     if config.DISCORD_TOKEN:
@@ -44,6 +82,10 @@ async def lifespan(app: FastAPI):
     else:
         logger.error("❌ DISCORD_TOKEN is missing!")
     
+    # Start self-ping task
+    logger.info("🏓 Starting self-ping task...")
+    self_ping_task = asyncio.create_task(self_ping())
+    
     yield
     
     # Shutdown
@@ -51,7 +93,15 @@ async def lifespan(app: FastAPI):
     if bot.client:
         await bot.client.close()
     
-    # Wait for the task to finish if needed (optional)
+    # Cancel self-ping task
+    if self_ping_task:
+        self_ping_task.cancel()
+        try:
+            await self_ping_task
+        except asyncio.CancelledError:
+            pass
+    
+    # Wait for the bot task to finish if needed (optional)
     if bot_task:
         try:
             await bot_task
@@ -81,6 +131,10 @@ def health_check():
 @app.post("/api/chat", response_model=ChatResponse)
 @limiter.limit("10/minute")
 async def chat_endpoint(request: Request, req: ChatRequest):
+    start_time = time.time()
+    used_model = "Unknown"
+    error_msg = None
+    
     try:
         # Construct a simple conversation log for the AI
         conversation_log = f"{req.user_name}: {req.text}"
@@ -102,13 +156,12 @@ async def chat_endpoint(request: Request, req: ChatRequest):
             except Exception as e:
                 logger.error(f"Analytics Error: {e}")
 
-        # Generate response using the existing bot brain
-        # response_text = await bot.brain.generate_response(
-        #     req.user_name, 
-        #     conversation_log
-        # )
+        # Need to capture which model was used.
+        # Since currently generate_response returns string, we might need to parse logs or adjust return type.
+        # For now, we assume the logger in ai_service outputs the model info.
+        # Ideally, we should refactor generate_response to return metadata.
+        # Observing logs from ai_service: "📨 返信モデル: {used_model}"
         
-        # 30秒タイムアウト設定 (bot.pyと同様)
         response_text = await asyncio.wait_for(
             bot.brain.generate_response(req.user_name, conversation_log, context_info),
             timeout=30.0
@@ -116,9 +169,26 @@ async def chat_endpoint(request: Request, req: ChatRequest):
         
         return ChatResponse(response=response_text)
     except Exception as e:
+        error_msg = str(e)
         logger.error(f"❌ API Chat Error: {e}")
         # Return 500 Internal Server Error with detail
         raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        # Structured Logging
+        duration = time.time() - start_time
+        
+        log_entry = {
+            "timestamp": datetime.now().isoformat(),
+            "event": "chat_request",
+            "ip": request.client.host,
+            "user_name": req.user_name,
+            "message_length": len(req.text),
+            "response_time": round(duration, 3),
+            "success": error_msg is None,
+            "error": error_msg
+        }
+        # Use a special prefix for easier parsing or just log as info
+        logger.info(f"ANALYTICS: {json.dumps(log_entry)}")
 
 @app.post("/api/ogp", response_model=OGPResponse)
 async def ogp_endpoint(req: OGPRequest):
