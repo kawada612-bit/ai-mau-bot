@@ -9,6 +9,9 @@ from slowapi.errors import RateLimitExceeded
 import asyncio
 import httpx
 import os
+import json
+import time
+from datetime import datetime
 
 from src.app import bot
 from src.core import config
@@ -128,6 +131,10 @@ def health_check():
 @app.post("/api/chat", response_model=ChatResponse)
 @limiter.limit("10/minute")
 async def chat_endpoint(request: Request, req: ChatRequest):
+    start_time = time.time()
+    used_model = "Unknown"
+    error_msg = None
+    
     try:
         # Construct a simple conversation log for the AI
         conversation_log = f"{req.user_name}: {req.text}"
@@ -149,13 +156,12 @@ async def chat_endpoint(request: Request, req: ChatRequest):
             except Exception as e:
                 logger.error(f"Analytics Error: {e}")
 
-        # Generate response using the existing bot brain
-        # response_text = await bot.brain.generate_response(
-        #     req.user_name, 
-        #     conversation_log
-        # )
+        # Need to capture which model was used.
+        # Since currently generate_response returns string, we might need to parse logs or adjust return type.
+        # For now, we assume the logger in ai_service outputs the model info.
+        # Ideally, we should refactor generate_response to return metadata.
+        # Observing logs from ai_service: "📨 返信モデル: {used_model}"
         
-        # 30秒タイムアウト設定 (bot.pyと同様)
         response_text = await asyncio.wait_for(
             bot.brain.generate_response(req.user_name, conversation_log, context_info),
             timeout=30.0
@@ -163,9 +169,26 @@ async def chat_endpoint(request: Request, req: ChatRequest):
         
         return ChatResponse(response=response_text)
     except Exception as e:
+        error_msg = str(e)
         logger.error(f"❌ API Chat Error: {e}")
         # Return 500 Internal Server Error with detail
         raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        # Structured Logging
+        duration = time.time() - start_time
+        
+        log_entry = {
+            "timestamp": datetime.now().isoformat(),
+            "event": "chat_request",
+            "ip": request.client.host,
+            "user_name": req.user_name,
+            "message_length": len(req.text),
+            "response_time": round(duration, 3),
+            "success": error_msg is None,
+            "error": error_msg
+        }
+        # Use a special prefix for easier parsing or just log as info
+        logger.info(f"ANALYTICS: {json.dumps(log_entry)}")
 
 @app.post("/api/ogp", response_model=OGPResponse)
 async def ogp_endpoint(req: OGPRequest):

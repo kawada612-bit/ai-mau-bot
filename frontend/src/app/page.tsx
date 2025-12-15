@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useRef, useEffect } from 'react';
+import { sendGAEvent } from '@next/third-parties/google';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Send, Menu, Sparkles, User, Bot, Edit2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
@@ -88,9 +89,16 @@ export default function ChatPage() {
 
     // 2. Call Backend API
     try {
+      // Send GA Event: Message Sent
+      sendGAEvent('event', 'chat_message_sent', {
+        user_name: userName,
+        message_length: userText.length
+      });
+
       // Send last 12 messages for context
       const history = messages.slice(-12).map(m => ({ role: m.role, text: m.text }));
 
+      const startTime = Date.now();
       const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/chat`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -104,6 +112,13 @@ export default function ChatPage() {
       if (!res.ok) throw new Error('API Error');
       const data = await res.json();
       const aiText = data.response; // Get actual text from API
+      const responseTime = (Date.now() - startTime) / 1000;
+
+      // Send GA Event: Response Received
+      sendGAEvent('event', 'ai_response_received', {
+        response_length: aiText.length,
+        response_time: responseTime
+      });
 
       // --- Start Pseudo-Streaming Logic (Reuse existing structure) ---
       const aiMsgId = (Date.now() + 1).toString();
@@ -131,6 +146,10 @@ export default function ChatPage() {
       // -----------------------------------------------------------
 
     } catch (error) {
+      // Send GA Event: Error
+      sendGAEvent('event', 'chat_error', {
+        error_message: String(error)
+      });
       setMessages(prev => [...prev, { id: Date.now().toString(), role: 'ai', text: 'ごめんね、ちょっと調子悪いみたい… (通信エラー) 😵‍💫' }]);
     } finally {
       setIsTyping(false);
