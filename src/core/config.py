@@ -35,3 +35,7 @@ PROFILE_FILE_PATH: str = os.path.join(DATA_DIR, "mau_profile.txt")
 
 # Default Persona
 DEFAULT_PROFILE: str = "あなたはアイドルの「AIまう」です。明るく親しみやすく振る舞ってください。"
+
+# CORS Configuration
+ALLOWED_ORIGINS_RAW: str = os.getenv("ALLOWED_ORIGINS", "*")
+ALLOWED_ORIGINS: list[str] = [origin.strip() for origin in ALLOWED_ORIGINS_RAW.split(",")] if ALLOWED_ORIGINS_RAW != "*" else ["*"]

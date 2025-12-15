@@ -18,15 +18,15 @@ class AnalyticsService:
     def get_schema_info(self) -> str:
         """AIに提示するテーブル定義"""
         return """
-Table: schedules
-Columns:
-  - title (text): イベント名
-  - start_at (text): 開始日時 (ISO 8601 format: YYYY-MM-DDTHH:MM:SS)
-  - description (text): 詳細メモ
-  - place (text): 会場・場所
-  - ticket_url (text): チケット購入URL
-  - price_details (text): 料金詳細 ("Adv 3000 / Door 3500" 等)
-  - bonus (text): 入場特典
+CREATE TABLE schedules (
+    title TEXT,          -- イベント名
+    start_at TEXT,       -- 開始日時 (Format: YYYY-MM-DDTHH:MM:SS, ISO 8601)
+    description TEXT,    -- 詳細メモ
+    place TEXT,          -- 会場・場所
+    ticket_url TEXT,     -- チケット購入URL
+    price_details TEXT,  -- 料金詳細 ("Adv 3000 / Door 3500" 等)
+    bonus TEXT           -- 入場特典
+);
 """
 
     def _get_fresh_connection(self):

@@ -1,25 +1,151 @@
 
-from flask import Flask
-from threading import Thread
+from contextlib import asynccontextmanager
+from fastapi import FastAPI, HTTPException, Request
+from fastapi.middleware.cors import CORSMiddleware
+from pydantic import BaseModel, Field
+from slowapi import Limiter, _rate_limit_exceeded_handler
+from slowapi.util import get_remote_address
+from slowapi.errors import RateLimitExceeded
+import asyncio
+
+from src.app import bot
+from src.core import config
 from src.core.logger import setup_logger
+from src.services.ogp_service import OGPService
 
 logger = setup_logger(__name__)
 
-app = Flask('')
+class ChatRequest(BaseModel):
+    text: str = Field(..., min_length=1, max_length=500, description="Message text (1-500 chars)")
+    user_name: str = Field(default="Guest", max_length=50, description="User name (max 50 chars)")
 
-@app.route('/')
-def home() -> str:
-    return "I'm alive"
+class ChatResponse(BaseModel):
+    response: str
 
-def run() -> None:
-    # Disable flask banners
-    import logging
-    log = logging.getLogger('werkzeug')
-    log.setLevel(logging.ERROR)
+class OGPRequest(BaseModel):
+    url: str = Field(..., description="URL to fetch OGP metadata from")
+
+class OGPResponse(BaseModel):
+    title: str
+    description: str
+    image: str
+
+# Global variable to hold the bot task
+bot_task = None
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    global bot_task
+    # Startup
+    logger.info("🚀 Starting Discord Bot via FastAPI lifespan...")
+    if config.DISCORD_TOKEN:
+        # Hold the task reference to prevent garbage collection
+        bot_task = asyncio.create_task(bot.client.start(config.DISCORD_TOKEN))
+    else:
+        logger.error("❌ DISCORD_TOKEN is missing!")
     
-    app.run(host='0.0.0.0', port=8080)
+    yield
+    
+    # Shutdown
+    logger.info("🛑 Shutting down Discord Bot...")
+    if bot.client:
+        await bot.client.close()
+    
+    # Wait for the task to finish if needed (optional)
+    if bot_task:
+        try:
+            await bot_task
+        except asyncio.CancelledError:
+            pass
 
-def start_server() -> None:
-    t = Thread(target=run, daemon=True)
-    t.start()
-    logger.info("🌍 Keep-Alive Server started on port 8080")
+app = FastAPI(title="AI Mau API", lifespan=lifespan)
+
+# Rate Limiter Setup
+limiter = Limiter(key_func=get_remote_address)
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
+
+# CORS Configuration
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=config.ALLOWED_ORIGINS,
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+@app.get("/health")
+def health_check():
+    return {"status": "ok"}
+
+@app.post("/api/chat", response_model=ChatResponse)
+@limiter.limit("10/minute")
+async def chat_endpoint(request: Request, req: ChatRequest):
+    try:
+        # Construct a simple conversation log for the AI
+        conversation_log = f"{req.user_name}: {req.text}"
+        
+        # ---------------------------------------------------
+        # 🤖 High-IQ Analytics Flow (Same as Discord Bot)
+        # ---------------------------------------------------
+        ANALYTICS_KEYWORDS = ['いつ', '予定', 'スケジュール', 'ライブ', 'イベント', '何回', '件数', '分析', '教えて']
+        context_info = None
+        
+        if any(k in req.text for k in ANALYTICS_KEYWORDS):
+            logger.info("🧠 Analytics Keyword Detected in API. Generating SQL...")
+            try:
+                # Reuse the same brain and analytics instance from bot module
+                sql = await bot.brain.generate_sql(req.text, bot.analytics.get_schema_info())
+                result_md = bot.analytics.execute_query(sql)
+                context_info = result_md
+                logger.info("📊 Analysis Result: " + str(context_info)[:50] + "...")
+            except Exception as e:
+                logger.error(f"Analytics Error: {e}")
+
+        # Generate response using the existing bot brain
+        # response_text = await bot.brain.generate_response(
+        #     req.user_name, 
+        #     conversation_log
+        # )
+        
+        # 30秒タイムアウト設定 (bot.pyと同様)
+        response_text = await asyncio.wait_for(
+            bot.brain.generate_response(req.user_name, conversation_log, context_info),
+            timeout=30.0
+        )
+        
+        return ChatResponse(response=response_text)
+    except Exception as e:
+        logger.error(f"❌ API Chat Error: {e}")
+        # Return 500 Internal Server Error with detail
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/api/ogp", response_model=OGPResponse)
+async def ogp_endpoint(req: OGPRequest):
+    """Fetch OGP metadata for a given URL."""
+    try:
+        ogp_data = await OGPService.fetch_ogp(req.url)
+        
+        # If OGP fetch fails, return empty data instead of error
+        # This allows the frontend to gracefully fallback to simple link card
+        if ogp_data is None:
+            logger.warning(f"⚠️ OGP fetch failed for {req.url}, returning empty data")
+            return OGPResponse(
+                title='',
+                description='',
+                image=''
+            )
+        
+        return OGPResponse(
+            title=ogp_data.get('title', ''),
+            description=ogp_data.get('description', ''),
+            image=ogp_data.get('image', '')
+        )
+    except Exception as e:
+        logger.error(f"❌ OGP API Error: {e}")
+        # Return empty data instead of error for better UX
+        return OGPResponse(
+            title='',
+            description='',
+            image=''
+        )

@@ -1,6 +1,6 @@
-
 import logging
 import asyncio
+from datetime import datetime
 import google.generativeai as genai # type: ignore
 from groq import Groq
 from src.core import config
@@ -48,6 +48,8 @@ class AIBrain:
         if not self.model_priority:
              return "SELECT * FROM schedules LIMIT 0;" # Fallback
 
+        current_time_str = datetime.now().strftime('%Y-%m-%dT%H:%M:%S')
+
         prompt = f"""
         You are a Data Analyst.
         Generate a single SQL query (SQLite syntax) to answer the user's question.
@@ -55,17 +57,24 @@ class AIBrain:
         [Schema]
         {schema_info}
 
+        [Current Time]
+        {current_time_str} (Use this as 'now' for relative dates)
+
         [User Question]
         {user_question}
 
         [Constraints]
         1. Output ONLY the raw SQL query. Do not use Markdown (```sql ... ```).
-        2. Use `SELECT` only. No INSERT/UPDATE/DELETE.
-        3. For "today" or relative dates, use SQLite functions like `date('now', 'localtime')` or `datetime('now', 'localtime')`.
-           Example: `WHERE start_at >= date('now', 'localtime')`
-        4. If the question implies "how many", use `COUNT(*)`.
-        5. If the question implies "list" or "schedule", prefer `SELECT *` or explicitly select `title`, `start_at`, `place`, `price_details`, `ticket_url`, and `bonus`.
-
+        2. **SINGLE STATEMENT ONLY**: You must output exactly one SELECT statement. Do NOT chain multiple queries with `;`.
+        3. **NO variables**: Do NOT attempt to CREATE variables or `SELECT ... AS current_time`. Use the [Current Time] string literal directly in your WHERE clause comparisons.
+        4. **Date Handling Requirments**:
+           - `start_at` is a TEXT column (ISO 8601).
+           - Do NOT use SQLite's `date('now')` or `CURRENT_DATE`.
+           - Compare `start_at` directly with calculated strings based on [Current Time].
+           - Example for "Tomorrow": If Current Time is '2025-10-10...', query `start_at LIKE '2025-10-11%'`.
+        5. If the question implies "how many", use `COUNT(*)`.
+        6. If the question implies "list" or "schedule", prefer `SELECT *` or explicitly select `title`, `start_at`, `place`, `price_details`, `ticket_url`, and `bonus`.
+        
         """
         
         # Try Groq (Llama 3) first
