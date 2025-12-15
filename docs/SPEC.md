@@ -39,6 +39,7 @@ graph LR
         WebUI("💬 Chat UI<br>(React)"):::frontend
         LinkCard("🎫 Link Card<br>(OGP表示)"):::frontend
         LocalStorage("💾 LocalStorage<br>(永続化)"):::frontend
+        PWA("📱 PWA<br>(Service Worker)"):::frontend
     end
 
     %% 外部AIサービス群
@@ -66,6 +67,7 @@ graph LR
     WebUI --> FastAPI
     WebUI --> LocalStorage
     WebUI --> LinkCard
+    WebUI --> PWA
     LinkCard --> FastAPI
 
     %% === ロジックフロー ===
@@ -113,7 +115,9 @@ graph LR
 
 ### 🧠 記憶と文脈
 
-  * **履歴参照:** 直近 **10件** の会話ログをプロンプトに含めて送信します。
+  * **履歴参照**: 
+    * **Discord Bot**: 直近 **10件** の会話ログをチャンネル履歴から取得してプロンプトに含めて送信します。
+    * **Web API**: フロントエンドから送信された直近 **12件** の会話履歴を受け取り、プロンプトに含めて送信します。
   * **文字数制限:** 返答は原則 **200文字以内** で、Twitterのリプライのようにテンポよく返します。
     * **例外:** ライブ情報の告知やスケジュール詳細を伝える場合は、情報量を優先し、文字数制限を無視して詳細に答えます。
   * **特典強調:** イベントに特典（Bonus）がある場合は、絵文字をつけて優先的にアピールします。
@@ -137,6 +141,11 @@ graph LR
       - 他人へのメンションがある → 無視。
       - 独り言・全体チャット → 反応。
 3.  **それ以外**: 無視。
+
+### 👤 ユーザー名設定機能 (Webフロントエンド)
+1. **初回アクセス判定**: LocalStorageにユーザー名が存在するかチェック。
+2. **名前設定モーダル**: 存在しない場合、モーダルを表示して名前入力を促す。
+3. **永続化**: 入力された名前をLocalStorageに保存し、以後の会話リクエストヘッダーまたはプロンプトに含める（現状はコンテキストに含めて送信）。
 
 ### 🔗 OGPリンクカード機能 (Webフロントエンド)
 
@@ -166,6 +175,15 @@ WebチャットではURLを含むメッセージに対して、以下の機能�
 | `src/core/`     | `config.py`            | 環境変数と定数管理。                          |
 |                 | `logger.py`            | ロギング設定。                                |
 
+### Web API エンドポイント
+
+| メソッド | パス        | 概要                                     |
+| :------- | :---------- | :--------------------------------------- |
+| `GET`    | `/`         | サーバー稼働確認用（ルート）。           |
+| `GET`    | `/health`   | ヘルスチェック用。Renderの監視等に使用。 |
+| `POST`   | `/api/chat` | チャット応答生成。                       |
+| `POST`   | `/api/ogp`  | 指定URLのOGPメタデータ取得。             |
+
 ### フロントエンド
 
 | ディレクトリ               | ファイル名             | 役割                            |
@@ -173,7 +191,9 @@ WebチャットではURLを含むメッセージに対して、以下の機能�
 | `frontend/src/app/`        | `page.tsx`             | メインチャットページ。          |
 |                            | `layout.tsx`           | ルートレイアウト。              |
 |                            | `globals.css`          | グローバルスタイル。            |
+|                            | `manifest.ts`          | PWAマニフェスト生成。           |
 | `frontend/src/components/` | `link-card.tsx`        | OGPリンクカードコンポーネント。 |
+|                            | `name-input-modal.tsx` | ユーザー名入力モーダル。        |
 | `frontend/src/hooks/`      | `use-local-storage.ts` | LocalStorage永続化フック。      |
 | `frontend/src/lib/`        | `utils.ts`             | ユーティリティ関数。            |
 
