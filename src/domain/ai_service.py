@@ -21,8 +21,7 @@ class AIBrain:
 
             # ① Priority Model (Gemini 2.5 Flash - Free Tier)
             self.model_priority = genai.GenerativeModel(
-                # model_name='gemini-2.5-flash', # テストのために一時的にコメントアウト
-                model_name='gemma-3-27b-it',
+                model_name='gemini-2.5-flash',
                 system_instruction=CHARACTER_SETTING
             )
 
@@ -34,8 +33,8 @@ class AIBrain:
 
             # ③ Backup Model (Gemma 3 (27B) - Sub/Cheap)
             self.model_backup_1 = genai.GenerativeModel(
-                model_name='gemma-3-27b-it',
-                system_instruction=CHARACTER_SETTING
+                model_name='gemma-3-27b-it'
+                # Gemma 3 doesn't support system_instruction via API yet
             )
         else:
             logger.warning("GEMINI_API_KEY が設定されていません。Geminiモデルは機能しません。")
@@ -220,7 +219,7 @@ class AIBrain:
         
         2. **メッセージ伝達**:
            ユーザーが「まうがまうだよ」「そうです」「うん」などと肯定した場合のみ、以下の伝言を「開発者からのメッセージがあります」と前置きして伝えてください：
-           「まうさん。いつも元気をくれてありがとう。ぼくの、みんなの太陽です。今後もよろしく。本当に感謝。一番すごいとおもっています。全てにおいて。えらいですまうさん。」
+           「まうさん。いつも元気をくれてありがとう。われわれの太陽です。今後もよろしくお願いします。このプロダクトをどうぞ楽しんでいってください。まうさんの活動に少しでも貢献できれば嬉しいです。」
 
         ※まだ肯定していないなら、伝言は伝えないでください。
         """
@@ -316,19 +315,21 @@ class AIBrain:
                     logger.warning(f"⚠️ Gemini Lite エラー: {e3}")
 
                     # ---------------------------------------------------
-                    # ④ Quaternary: Gemini 1.5 Flash (Sub/Paid Fallback)
+                    # ④ Quaternary: Gemma 3 27B (Sub/Cheap)
                     # ---------------------------------------------------
                     try:
                         if not self.model_backup_1:
-                             raise Exception("Gemini API Key missing for 1.5")
+                             raise Exception("Gemini API Key missing for Gemma 3")
                         
-                        logger.info("🛡️ 4. Gemini 1.5 Flash (Sub) 最終防衛！！")
-                        response = await self.model_backup_1.generate_content_async(prompt)
+                        logger.info("🛡️ 4. Gemma 3 27B (Sub) 最終防衛！！")
+                        # Gemma 3 needs system instruction in prompt
+                        full_prompt = f"{CHARACTER_SETTING}\n\n{prompt}"
+                        response = await self.model_backup_1.generate_content_async(full_prompt)
                         response_text = response.text
-                        used_model = "Gemini 1.5"
+                        used_model = "Gemma 3 27B"
                         mode = "BACKUP"
                         footer_note = "\n\n(※バックアップモード🔄)"
-                        logger.info("✅ Gemini 1.5で生成成功！")
+                        logger.info("✅ Gemma 3 27Bで生成成功！")
 
                     except Exception as e4:
                         logger.error(f"❌ 全モデル全滅: {e4}")
