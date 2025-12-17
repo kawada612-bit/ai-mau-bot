@@ -5,6 +5,7 @@ import sys
 import argparse
 from datetime import datetime, timedelta, timezone
 from dateutil.relativedelta import relativedelta
+from typing import Optional
 from playwright.sync_api import sync_playwright
 from supabase import create_client
 from groq import Groq
@@ -17,7 +18,7 @@ logger = setup_logger(__name__)
 TIMETREE_BASE_URL: str = "https://timetreeapp.com/public_calendars/lollipop_1116"
 
 # Groq初期化
-groq_client: Groq | None = None
+groq_client: Optional[Groq] = None
 if config.GROQ_API_KEY:
     groq_client = Groq(api_key=config.GROQ_API_KEY)
 
