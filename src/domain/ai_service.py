@@ -21,7 +21,8 @@ class AIBrain:
 
             # ① Priority Model (Gemini 2.5 Flash - Free Tier)
             self.model_priority = genai.GenerativeModel(
-                model_name='gemini-2.5-flash',
+                # model_name='gemini-2.5-flash', # テストのために一時的にコメントアウト
+                model_name='gemma-3-27b-it',
                 system_instruction=CHARACTER_SETTING
             )
 
@@ -31,9 +32,9 @@ class AIBrain:
                 system_instruction=CHARACTER_SETTING
             )
 
-            # ③ Backup Model (Gemini 1.5 Flash - Sub/Cheap)
+            # ③ Backup Model (Gemma 3 (27B) - Sub/Cheap)
             self.model_backup_1 = genai.GenerativeModel(
-                model_name='gemini-1.5-flash',
+                model_name='gemma-3-27b-it',
                 system_instruction=CHARACTER_SETTING
             )
         else:
