@@ -33,6 +33,7 @@ class ChatRequest(BaseModel):
 class ChatResponse(BaseModel):
     response: str
     mode: str = Field(default="unknown", description="The mode/model used for generation (reflex, genius, speed, main, backup)")
+    suggestions: list[str] = Field(default=[], description="Suggested follow-up messages for the user")
 
 
 class OGPRequest(BaseModel):
@@ -190,12 +191,12 @@ async def chat_endpoint(request: Request, req: ChatRequest):
         # Ideally, we should refactor generate_response to return metadata.
         # Observing logs from ai_service: "📨 返信モデル: {used_model}"
         
-        response_text, mode = await asyncio.wait_for(
+        response_text, mode, suggestions = await asyncio.wait_for(
             bot.brain.generate_response(req.user_name, conversation_log, context_info, req.timezone),
             timeout=30.0
         )
         
-        return ChatResponse(response=response_text, mode=mode)
+        return ChatResponse(response=response_text, mode=mode, suggestions=suggestions)
     except Exception as e:
         error_msg = str(e)
         logger.error(f"❌ API Chat Error: {e}")

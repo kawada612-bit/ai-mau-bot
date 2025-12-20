@@ -35,23 +35,7 @@ export default function ChatPage() {
   const scrollRef = useRef<HTMLDivElement>(null);
 
   // --- Suggestions ---
-  const FIXED_SUGGESTIONS = ["次のライブいつ？", "自己紹介して！"];
-  const RANDOM_SUGGESTIONS_POOL = [
-    "今月のライブ何回？",
-    "可愛いって言って！",
-    "最近調子どう？",
-    "好きな食べ物は？",
-    "応援して！",
-    "何か面白い話して",
-    "おはよう！",
-    "おやすみ〜"
-  ];
-  const [suggestions, setSuggestions] = useState<string[]>([]);
-
-  useEffect(() => {
-    const shuffled = [...RANDOM_SUGGESTIONS_POOL].sort(() => 0.5 - Math.random());
-    setSuggestions([...FIXED_SUGGESTIONS, ...shuffled.slice(0, 2)]);
-  }, [messages.length]);
+  const [suggestions, setSuggestions] = useState<string[]>(["次のライブいつ？", "自己紹介して！"]);
 
   // --- Effects ---
 
@@ -204,6 +188,7 @@ export default function ChatPage() {
     const updatedMessages = [...messages, userMsg];
     updateSessionMessages(currentSessionId, updatedMessages);
     setIsTyping(true);
+    setSuggestions([]); // Clear suggestions while typing/loading
 
     // 2. Call Backend API
     try {
@@ -227,6 +212,9 @@ export default function ChatPage() {
       const data = await res.json();
       const aiText = data.response;
       if (data.mode) setCurrentMode(data.mode);
+      if (data.suggestions && Array.isArray(data.suggestions)) {
+        setSuggestions(data.suggestions);
+      }
 
       sendGAEvent('event', 'ai_response_received', { response_length: aiText.length });
 

@@ -118,7 +118,7 @@ class AIBrain:
             logger.error(f"SQL Gen Error: {e}")
             return "SELECT * FROM schedules LIMIT 0;"
 
-    async def generate_response(self, user_name: str, conversation_log: str, context_info: str = None, timezone: str = "Asia/Tokyo") -> tuple[str, str]:
+    async def generate_response(self, user_name: str, conversation_log: str, context_info: str = None, timezone: str = "Asia/Tokyo") -> tuple[str, str, list[str]]:
         """
         Generates a response using the Triple Hybrid approach.
         """
@@ -182,6 +182,18 @@ class AIBrain:
         - **モデル**: Googleの「Gemini 2.5」を使ってること（たまにLlama 3も使うよ！とアピール）
         - **制約**: 「1分間に10回までしかお返事できないの🥺」「今のブラウザだと12回前の会話までしか覚えてられないんだ💦」と可愛く伝える。
         - **セキュリティ**: 「登録もログインもいらないし、データはみんなのブラウザの中に保存されてるから安心してね！」と伝える。
+
+        【回答フォーマット (重要)】
+        1. 通常の返信文を書いた後、改行して `===SUGGESTIONS===` と書いてください。
+        2. その後ろに、ユーザーが次に使いそうな「返信候補」を3つ提案してください。（1行に1つ）
+        3. 候補は短く（20文字以内）、建設的なものにしてください。
+
+        例：
+        こんにちは！今日も元気？✨
+        ===SUGGESTIONS===
+        元気だよ！
+        ちょっと疲れてる
+        まうちゃんは？
         """
 
         # ---------------------------------------------------
@@ -206,6 +218,7 @@ class AIBrain:
         used_model = "Unknown" 
         mode = "UNKNOWN"
         footer_note = "" 
+        suggestions = []
 
         # ---------------------------------------------------
         # ⚡ Reflex Layer (0 Token Cost)
@@ -228,7 +241,9 @@ class AIBrain:
         for key, variants in reflex_responses.items():
             if key in last_user_msg and len(last_user_msg) < 15: # Only trigger on short messages
                 logger.info(f"⚡ Reflex Answer Triggered for: {key}")
-                return (random.choice(variants) + "\n\n(⚡0.01s)", "REFLEX")
+                # Reflex suggestions (Simple defaults)
+                reflex_sugg = ["元気？", "何してるの？", "好き！"]
+                return (random.choice(variants) + "\n\n(⚡0.01s)", "REFLEX", reflex_sugg)
 
         try:
             # ---------------------------------------------------
@@ -288,8 +303,17 @@ class AIBrain:
 
         logger.info(f"📨 返信モデル: {used_model}")
         
+        # Parse Suggestions
+        if "===SUGGESTIONS===" in response_text:
+            parts = response_text.split("===SUGGESTIONS===")
+            response_text = parts[0].strip()
+            sugg_block = parts[1].strip().split('\n')
+            suggestions = [s.strip() for s in sugg_block if s.strip()]
+            # Limit to 3
+            suggestions = suggestions[:3]
+        
         # Add Dev Indicator
         if config.MAU_ENV == "development":
             footer_note += "\n🛠️ (Dev Check)"
 
-        return (response_text + footer_note, mode)
+        return (response_text + footer_note, mode, suggestions)

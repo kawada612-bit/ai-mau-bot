@@ -154,7 +154,7 @@ export function Sidebar({
 
                     {/* Footer (Optional) */}
                     <div className="mt-4 pt-4 border-t border-slate-100 text-center text-xs text-slate-400">
-                        Powered by Gemini 1.5 Pro
+                        Powered by Gemini 3 Flash
                     </div>
                 </div>
             </motion.div>
