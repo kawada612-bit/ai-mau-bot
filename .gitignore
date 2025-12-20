@@ -7,3 +7,4 @@ venv/
 # Pythonのキャッシュファイル（ゴミ）は無視
 __pycache__/
 *.pyc
+package-lock.json

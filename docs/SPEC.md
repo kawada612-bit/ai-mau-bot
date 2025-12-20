@@ -44,10 +44,9 @@ graph LR
 
     %% 外部AIサービス群
     subgraph AI_Services ["🧠 AI 推論API群 (Free Plan)"]
-        GeminiMain("Google AI Studio<br>Gemini 2.5 Flash"):::ai
+        GeminiMain("Google AI Studio<br>Gemini 3 Flash"):::ai
         GeminiSub("Google AI Studio<br>Gemini 2.5 Flash Lite"):::ai
-        GroqAI("Groq Cloud<br>Llama 3.3"):::ai
-        GroqWorker("Groq Cloud<br>Llama 3"):::ai
+        GeminiBackup("Google AI Studio<br>Gemma 3 (Ponkotsu)"):::ai
     end
 
     %% 外部データベース・他サービス
@@ -77,7 +76,7 @@ graph LR
         Bot -->|"① 会話要求"| GeminiMain
         FastAPI -->|"① 会話要求"| GeminiMain
         GeminiMain -.->|"② エラー/制限時"| GeminiSub
-        GeminiSub -.->|"③ エラー/制限時"| GroqAI
+        GeminiSub -.->|"③ エラー/制限時"| GeminiBackup
     end
 
     %% 2. データ分析ロジック
@@ -205,7 +204,7 @@ WebチャットではURLを含むメッセージに対して、以下の機能�
 | **UptimeRobot**      | 死活監視         | Free   |
 | **Supabase**         | データベース     | Free   |
 | **Google AI Studio** | AI推論 (Gemini)  | Free   |
-| **Groq Cloud**       | AI推論 (Llama 3) | Free   |
+| **Google AI Studio** | AI推論 (Gemini)  | Free   |
 
 ## 5. データベース設計 (Supabase)
 

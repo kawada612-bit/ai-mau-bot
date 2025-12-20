@@ -2,7 +2,7 @@ import logging
 import asyncio
 from datetime import datetime, timedelta
 import google.generativeai as genai # type: ignore
-from groq import Groq
+
 from src.core import config
 from src.domain.persona import CHARACTER_SETTING
 from src.core.logger import setup_logger
@@ -19,15 +19,15 @@ class AIBrain:
         if config.GEMINI_API_KEY:
             genai.configure(api_key=config.GEMINI_API_KEY)
 
-            # ① Priority Model (Gemini 2.5 Flash - Free Tier)
+            # ① Priority Model (Gemini 3 Flash - New!)
             self.model_priority = genai.GenerativeModel(
-                model_name='gemini-2.5-flash',
+                model_name='gemini-3-flash-preview',
                 system_instruction=CHARACTER_SETTING
             )
 
             # ② Secondary Model (Gemini 2.5 Flash-Lite - Free Tier Workhorse)
             self.model_lite = genai.GenerativeModel(
-                model_name='gemini-2.5-flash-lite-001', # Assuming actual name is needed, or just gemini-2.5-flash-lite
+                model_name='gemini-2.5-flash-lite', # Assuming actual name is needed, or just gemini-2.5-flash-lite
                 system_instruction=CHARACTER_SETTING
             )
 
@@ -39,14 +39,7 @@ class AIBrain:
         else:
             logger.warning("GEMINI_API_KEY が設定されていません。Geminiモデルは機能しません。")
 
-        # Configure Groq
-        # ③ Final Weapon (Groq - Llama 3)
-        self.groq_client: Groq | None = None
-        if config.GROQ_API_KEY:
-            self.groq_client = Groq(api_key=config.GROQ_API_KEY)
-            logger.info("✅ Groqクライアント(Llama 3)の準備完了")
-        else:
-            logger.warning("GROQ_API_KEY未設定: Llama 3 バックアップは無効です")
+
 
     async def generate_sql(self, user_question: str, schema_info: str) -> str:
         """
@@ -115,22 +108,7 @@ class AIBrain:
         
         """
         
-        # Try Groq (Llama 3) first
-        if self.groq_client:
-            try:
-                completion = self.groq_client.chat.completions.create(
-                    model="llama-3.3-70b-versatile",
-                    messages=[
-                        {"role": "system", "content": "You are a SQL expert. Output ONLY the raw SQL query string. No Markdown."},
-                        {"role": "user", "content": prompt}
-                    ],
-                    temperature=0.0,
-                    max_tokens=256
-                )
-                sql = completion.choices[0].message.content.strip()
-                return sql.replace("```sql", "").replace("```", "").strip()
-            except Exception as e:
-                logger.warning(f"⚠️ Groq SQL Gen failed: {e}. Falling back to Gemini.")
+
 
         # Fallback to Gemini
         try:
@@ -254,86 +232,59 @@ class AIBrain:
 
         try:
             # ---------------------------------------------------
-            # ① Priority: Gemini 2.5 Flash (Free Tier)
+            # ① Priority: Gemini 3 Flash (New Standard)
             # ---------------------------------------------------
             if not self.model_priority:
                  raise Exception("Gemini API Key missing")
 
-            logger.info("✨ 1. Gemini 2.5 Flash (Free) で挑戦中...")
+            logger.info("✨ 1. Gemini 3 Flash で挑戦中...")
             response = await self.model_priority.generate_content_async(prompt)
             response_text = response.text
-            used_model = "Gemini 2.5"
+            used_model = "Gemini 3 Flash"
             mode = "GENIUS"
-            logger.info("✅ Gemini 2.5で生成成功！")
+            logger.info("✅ Gemini 3 Flashで生成成功！")
             
         except Exception as e1:
-            logger.warning(f"⚠️ Gemini 2.5 エラー: {e1}")
+            logger.warning(f"⚠️ Gemini 3 Flash エラー: {e1}")
             
             # ---------------------------------------------------
-            # ② Secondary: Groq Llama 3 70B (Free Tier)
+            # ② Secondary: Gemini 2.5 Flash-Lite (Free Tier Workhorse)
             # ---------------------------------------------------
             try:
-                if not self.groq_client:
-                    raise Exception("Groq API Key missing")
+                if not self.model_lite:
+                     raise Exception("Gemini API Key missing for Lite")
                 
-                target_model = "llama-3.3-70b-versatile"
-                logger.info(f"🔥 2. Groq (Llama 3 70B) に切り替えます...")
+                logger.info("🐎 2. Gemini 2.5 Flash-Lite (Free) 出動！！")
+                response = await self.model_lite.generate_content_async(prompt)
+                response_text = response.text
+                used_model = "Gemini 2.5 Lite"
+                mode = "MAIN"
+                footer_note = "\n\n(※Liteモード🔋)"
+                logger.info("✅ Gemini Liteで生成成功！")
                 
-                completion = self.groq_client.chat.completions.create(
-                    model=target_model,
-                    messages=[
-                        {"role": "system", "content": CHARACTER_SETTING},
-                        {"role": "user", "content": prompt}
-                    ],
-                    temperature=0.7,
-                    max_tokens=1024,
-                )
-                response_text = completion.choices[0].message.content or ""
-                used_model = f"Groq Llama 3 70B"
-                mode = "SPEED"
-                logger.info(f"✅ Groq ({target_model}) で生成成功！")
-            
             except Exception as e2:
-                logger.warning(f"⚠️ Groq エラー: {e2}")
-                
+                logger.warning(f"⚠️ Gemini Lite エラー: {e2}")
+
                 # ---------------------------------------------------
-                # ③ Tertiary: Gemini 2.5 Flash-Lite (Free Tier Workhorse)
+                # ③ Tertiary: Gemma 3 27B (Ponkotsu Mode)
                 # ---------------------------------------------------
                 try:
-                    if not self.model_lite:
-                         raise Exception("Gemini API Key missing for Lite")
+                    if not self.model_backup_1:
+                         raise Exception("Gemini API Key missing for Gemma 3")
                     
-                    logger.info("🐎 3. Gemini 2.5 Flash-Lite (Free) 出動！！")
-                    response = await self.model_lite.generate_content_async(prompt)
+                    logger.info("🛡️ 3. Gemma 3 27B (ポンコツモード) 最終防衛！！")
+                    # Gemma 3 needs system instruction in prompt
+                    full_prompt = f"{CHARACTER_SETTING}\n\n{prompt}"
+                    response = await self.model_backup_1.generate_content_async(full_prompt)
                     response_text = response.text
-                    used_model = "Gemini 2.5 Lite"
-                    mode = "MAIN"
-                    footer_note = "\n\n(※Liteモード🔋)"
-                    logger.info("✅ Gemini Liteで生成成功！")
-                    
+                    used_model = "Gemma 3 27B"
+                    mode = "PONKOTSU"
+                    footer_note = "\n\n(※ポンコツモード🤪)"
+                    logger.info("✅ Gemma 3 27Bで生成成功！")
+
                 except Exception as e3:
-                    logger.warning(f"⚠️ Gemini Lite エラー: {e3}")
-
-                    # ---------------------------------------------------
-                    # ④ Quaternary: Gemma 3 27B (Sub/Cheap)
-                    # ---------------------------------------------------
-                    try:
-                        if not self.model_backup_1:
-                             raise Exception("Gemini API Key missing for Gemma 3")
-                        
-                        logger.info("🛡️ 4. Gemma 3 27B (Sub) 最終防衛！！")
-                        # Gemma 3 needs system instruction in prompt
-                        full_prompt = f"{CHARACTER_SETTING}\n\n{prompt}"
-                        response = await self.model_backup_1.generate_content_async(full_prompt)
-                        response_text = response.text
-                        used_model = "Gemma 3 27B"
-                        mode = "BACKUP"
-                        footer_note = "\n\n(※バックアップモード🔄)"
-                        logger.info("✅ Gemma 3 27Bで生成成功！")
-
-                    except Exception as e4:
-                        logger.error(f"❌ 全モデル全滅: {e4}")
-                        response_text = "ごめんね、今日は回線が全部パンクしちゃったみたい😵‍💫💦 また明日遊ぼうね！"
+                    logger.error(f"❌ 全モデル全滅: {e3}")
+                    response_text = "ごめんね、今日は回線が全部パンクしちゃったみたい😵‍💫💦 また明日遊ぼうね！"
 
         logger.info(f"📨 返信モデル: {used_model}")
         

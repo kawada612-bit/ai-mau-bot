@@ -273,7 +273,7 @@ export default function ChatPage() {
       case 'GENIUS': return '✨ 天才モード';
       case 'SPEED': return '🚀 高速モード';
       case 'MAIN': return '🐎 メインモード';
-      case 'BACKUP': return '🛡️ バックアップモード';
+      case 'PONKOTSU': return '🛡️ ポンコツモード';
       default: return 'Always with you';
     }
   };
