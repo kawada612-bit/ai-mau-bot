@@ -186,7 +186,7 @@ export default function ChatPage() {
   // --- Logic: Chat ---
 
   const handleSend = async (text?: string) => {
-    if (!currentSessionId) return;
+    if (!currentSessionId || isTyping) return;
 
     const content = text || inputValue;
     if (!content.trim()) return;
@@ -480,9 +480,10 @@ export default function ChatPage() {
                 value={inputValue}
                 onChange={(e) => setInputValue(e.target.value)}
                 onKeyDown={handleKeyDown}
+                disabled={isTyping}
                 rows={1}
-                className="glass-input w-full rounded-[20px] px-4 py-3 text-[15px] placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-theme-primary/50 text-slate-700 resize-none max-h-32 transition-all no-scrollbar"
-                placeholder="まうにメッセージを送る..."
+                className="glass-input w-full rounded-[20px] px-4 py-3 text-[15px] placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-theme-primary/50 text-slate-700 resize-none max-h-32 transition-all no-scrollbar disabled:opacity-50 disabled:cursor-not-allowed"
+                placeholder={isTyping ? "まうが入力中だよ" : "まうにメッセージを送る..."}
                 style={{ minHeight: '48px' }}
               />
             </div>
