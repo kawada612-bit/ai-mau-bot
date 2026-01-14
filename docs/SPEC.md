@@ -44,9 +44,11 @@ graph LR
 
     %% 外部AIサービス群
     subgraph AI_Services ["🧠 AI 推論API群 (Free Plan)"]
-        GeminiMain("Google AI Studio<br>Gemini 3 Flash"):::ai
-        GeminiSub("Google AI Studio<br>Gemini 2.5 Flash Lite"):::ai
-        GeminiBackup("Google AI Studio<br>Gemma 3 (Ponkotsu)"):::ai
+        Gemini3Flash("Google AI Studio<br>Gemini 3 Flash Preview"):::ai
+        Gemini25Flash("Google AI Studio<br>Gemini 2.5 Flash"):::ai
+        GeminiLite("Google AI Studio<br>Gemini 2.5 Flash Lite"):::ai
+        Gemini20Exp("Google AI Studio<br>Gemini 2.0 Flash Exp"):::ai
+        Gemma3("Google AI Studio<br>Gemma 3 27B"):::ai
     end
 
     %% 外部データベース・他サービス
@@ -73,10 +75,12 @@ graph LR
 
     %% 1. 通常会話ロジック (Discord)
     subgraph Logic_Brain ["🗣️ 通常会話ロジック (AI Brain)"]
-        Bot -->|"① 会話要求"| GeminiMain
-        FastAPI -->|"① 会話要求"| GeminiMain
-        GeminiMain -.->|"② エラー/制限時"| GeminiSub
-        GeminiSub -.->|"③ エラー/制限時"| GeminiBackup
+        Bot -->|"① 会話要求"| Gemini3Flash
+        FastAPI -->|"① 会話要求"| Gemini3Flash
+        Gemini3Flash -.->|"② エラー/制限時"| Gemini25Flash
+        Gemini25Flash -.->|"③ エラー/制限時"| GeminiLite
+        GeminiLite -.->|"④ エラー/制限時"| Gemini20Exp
+        Gemini20Exp -.->|"⑤ エラー/制限時"| Gemma3
     end
 
     %% 2. データ分析ロジック
@@ -85,8 +89,8 @@ graph LR
         FastAPI -->|"①「分析して」等"| Analytics
         Analytics -->|"② データロード"| DB
         Analytics -->|"③ 一時DB作成"| SQLite
-        Analytics -->|"④ SQL生成要求"| GeminiMain
-        GeminiMain -->|"⑤ SQL実行"| SQLite
+        Analytics -->|"④ SQL生成要求"| Gemini3Flash
+        Gemini3Flash -->|"⑤ SQL実行"| SQLite
         SQLite -->|"⑥ 結果データ返却"| Bot
         SQLite -->|"⑥ 結果データ返却"| FastAPI
     end
@@ -179,12 +183,12 @@ WebチャットではURLを含むメッセージに対して、以下の機能�
 
 ### Web API エンドポイント
 
-| メソッド | パス        | 概要                                     |
-| :------- | :---------- | :--------------------------------------- |
-| `GET`    | `/`         | サーバー稼働確認用（ルート）。           |
-| `GET`    | `/health`   | ヘルスチェック用。Renderの監視等に使用。 |
+| メソッド | パス        | 概要                                                         |
+| :------- | :---------- | :----------------------------------------------------------- |
+| `GET`    | `/`         | サーバー稼働確認用（ルート）。                               |
+| `GET`    | `/health`   | ヘルスチェック用。Renderの監視等に使用。                     |
 | `POST`   | `/api/chat` | チャット応答生成。`response`, `mode`, `suggestions` を返却。 |
-| `POST`   | `/api/ogp`  | 指定URLのOGPメタデータ取得。             |
+| `POST`   | `/api/ogp`  | 指定URLのOGPメタデータ取得。                                 |
 
 ### フロントエンド
 
@@ -201,13 +205,16 @@ WebチャットではURLを含むメッセージに対して、以下の機能�
 
 ## 4. 管理情報 (Service Stack)
 
-| サービス             | 用途             | プラン |
-| :------------------- | :--------------- | :----- |
-| **Render**           | ホスティング     | Free   |
-| **UptimeRobot**      | 死活監視         | Free   |
-| **Supabase**         | データベース     | Free   |
-| **Google AI Studio** | AI推論 (Gemini)  | Free   |
-| **Google AI Studio** | AI推論 (Gemini)  | Free   |
+| サービス             | 用途                   | プラン |
+| :------------------- | :--------------------- | :----- |
+| **Render**           | ホスティング           | Free   |
+| **UptimeRobot**      | 死活監視               | Free   |
+| **Supabase**         | データベース           | Free   |
+| **Google AI Studio** | Gemini 3 Flash Preview | Free   |
+| **Google AI Studio** | Gemini 2.5 Flash       | Free   |
+| **Google AI Studio** | Gemini 2.5 Flash Lite  | Free   |
+| **Google AI Studio** | Gemini 2.0 Flash Exp   | Free   |
+| **Google AI Studio** | Gemma 3 27B            | Free   |
 
 ## 5. データベース設計 (Supabase)
 
