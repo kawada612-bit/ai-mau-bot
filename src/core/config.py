@@ -17,6 +17,9 @@ GROQ_API_KEY: Optional[str] = os.getenv("GROQ_API_KEY")
 SUPABASE_URL: Optional[str] = os.getenv("SUPABASE_URL")
 SUPABASE_KEY: Optional[str] = os.getenv("SUPABASE_KEY")
 
+# Sync API Token (for UptimeRobot scheduled triggers)
+SYNC_SECRET_TOKEN: str = os.getenv("SYNC_SECRET_TOKEN", "")
+
 # Target Channel
 TARGET_CHANNEL_ID_RAW = os.getenv("TARGET_CHANNEL_ID")
 try:
