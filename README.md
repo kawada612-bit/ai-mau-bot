@@ -2,7 +2,7 @@
 
 実在するアイドルのデータを基に、その人格（口調・性格・リスペクト）を模倣して会話する Discord Bot + Web チャットアプリケーションです。
 
-Google の生成AI「Gemini 2.5 Flash」を主軸に、予備の「Gemini 2.5 Flash Lite」、さらに最終手段として「Groq (Llama 3)」を搭載した**トリプルハイブリッド構成**を採用。
+Google の生成AI「Gemini 3 Flash Preview」を筆頭に、5つのモデルをフォールバック構成で搭載。
 API制限やサーバーダウン時でも会話を継続できる、極めて高い可用性を実現しています。
 
 ## ✨ 主な機能
@@ -28,10 +28,12 @@ API制限やサーバーダウン時でも会話を継続できる、極めて�
 ### Backend
 * **言語:** Python 3.10+
 * **フレームワーク:** `discord.py`, `FastAPI`
-* **AIモデル:**
-    * Main: Google Gemini 2.5 Flash
-    * Sub: Google Gemini 2.5 Flash Lite
-    * Fallback: Groq (Llama 3.3)
+* **AIモデル (本番環境優先順):**
+    1. Google Gemini 3 Flash Preview (最新・最高性能)
+    2. Google Gemini 2.5 Flash (高性能)
+    3. Google Gemini 2.5 Flash Lite (Free Tier)
+    4. Google Gemma 3 27B (バックアップ)
+* **開発環境:** Gemma 3 → 2.5 Lite → 2.5 Flash → 3 Flash (コスト節約優先)
 * **データベース:** Supabase (PostgreSQL)
 * **スケジューラー:** TimeTree連携による自動データ同期
 

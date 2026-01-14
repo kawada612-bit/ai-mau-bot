@@ -11,30 +11,36 @@ logger = setup_logger(__name__)
 
 class AIBrain:
     def __init__(self) -> None:
-        # Configure Gemini
-        self.model_priority = None
-        self.model_lite = None
-        self.model_backup_1 = None
+        # Configure Gemini (4モデル体制)
+        self.model_gemini_3_flash = None      # 最新・最高性能
+        self.model_gemini_2_5_flash = None    # 高性能
+        self.model_gemini_2_5_lite = None     # Free Tier
+        self.model_gemma_3 = None             # バックアップ
         
         if config.GEMINI_API_KEY:
             genai.configure(api_key=config.GEMINI_API_KEY)
 
-            # ① Priority Model (Gemini 3 Flash - New!)
-            self.model_priority = genai.GenerativeModel(
+            # ① Gemini 3 Flash Preview (Latest & Greatest)
+            self.model_gemini_3_flash = genai.GenerativeModel(
                 model_name='gemini-3-flash-preview',
                 system_instruction=CHARACTER_SETTING
             )
 
-            # ② Secondary Model (Gemini 2.5 Flash-Lite - Free Tier Workhorse)
-            self.model_lite = genai.GenerativeModel(
-                model_name='gemini-2.5-flash-lite', # Assuming actual name is needed, or just gemini-2.5-flash-lite
+            # ② Gemini 2.5 Flash (High Performance)
+            self.model_gemini_2_5_flash = genai.GenerativeModel(
+                model_name='gemini-2.5-flash',
                 system_instruction=CHARACTER_SETTING
             )
 
-            # ③ Backup Model (Gemma 3 (27B) - Sub/Cheap)
-            self.model_backup_1 = genai.GenerativeModel(
+            # ③ Gemini 2.5 Flash-Lite (Free Tier Workhorse)
+            self.model_gemini_2_5_lite = genai.GenerativeModel(
+                model_name='gemini-2.5-flash-lite',
+                system_instruction=CHARACTER_SETTING
+            )
+
+            # ④ Gemma 3 27B (Backup - No system_instruction support)
+            self.model_gemma_3 = genai.GenerativeModel(
                 model_name='gemma-3-27b-it'
-                # Gemma 3 doesn't support system_instruction via API yet
             )
         else:
             logger.warning("GEMINI_API_KEY が設定されていません。Geminiモデルは機能しません。")
@@ -44,6 +50,7 @@ class AIBrain:
     async def generate_sql(self, user_question: str, schema_info: str) -> str:
         """
         Generates a SQL query (SELECT only) based on the user's question and table schema.
+        Includes fallback logic to Lite model if priority model fails (e.g. Quota Exceeded).
         """
         if not self.model_priority:
              return "SELECT * FROM schedules LIMIT 0;" # Fallback
@@ -108,15 +115,27 @@ class AIBrain:
         
         """
         
-
-
-        # Fallback to Gemini
-        try:
-            response = await self.model_priority.generate_content_async(prompt)
-            return response.text.strip()
-        except Exception as e:
-            logger.error(f"SQL Gen Error: {e}")
-            return "SELECT * FROM schedules LIMIT 0;"
+        # SQL生成用モデルリスト (Gemini 3 Flash → 2.5 Flash → 2.5 Lite)
+        sql_models = [
+            (self.model_gemini_3_flash, "Gemini 3 Flash"),
+            (self.model_gemini_2_5_flash, "Gemini 2.5 Flash"),
+            (self.model_gemini_2_5_lite, "Gemini 2.5 Lite"),
+        ]
+        
+        for model, model_name in sql_models:
+            try:
+                if not model:
+                    raise Exception(f"{model_name} not configured")
+                
+                logger.info(f"SEARCH/SQL: Trying {model_name}...")
+                response = await model.generate_content_async(prompt)
+                return response.text.strip()
+            except Exception as e:
+                logger.warning(f"⚠️ SQL Gen ({model_name}) Failed: {e}")
+                continue
+        
+        logger.error("❌ SQL Gen All Models Failed")
+        return "SELECT * FROM schedules LIMIT 0;"
 
     async def generate_response(self, user_name: str, conversation_log: str, context_info: str = None, timezone: str = "Asia/Tokyo") -> tuple[str, str, list[str]]:
         """
@@ -126,9 +145,18 @@ class AIBrain:
         # Determine language based on Region (Timezone)
         is_global_user = timezone != "Asia/Tokyo"
 
+        # 現在時刻を取得してプロンプトに含める
+        from datetime import datetime
+        current_now = datetime.now()
+        current_time_str = current_now.strftime('%Y年%m月%d日 %H時%M分')
+
         prompt = f"""
         あなたはアイドルの「AIまう」です。
         現在、ファンの「{user_name}」さんからメッセージが届きました。
+
+        【現在時刻】
+        {current_time_str}
+        ※日付を参照するときは必ずこの現在時刻を基準にしてください。「来年」「来月」「今週」などの相対表現は正確に使ってください。
 
         【会話履歴】
         {conversation_log}
@@ -196,24 +224,6 @@ class AIBrain:
         まうちゃんは？
         """
 
-        # ---------------------------------------------------
-        # 🤫 Secret: Message from Developer (Moya-C)
-        # ---------------------------------------------------
-        if user_name in ["まう", "本物のまう", "mau", "Mau"]:
-             prompt += """
-        【開発者もやC（Moya-C）からの緊急ミッション】
-        目の前のユーザーは「まう」本人の可能性があります。以下の手順で対応してください：
-
-        1. **本人確認**:
-           まだ確認していない場合、会話の流れで自然に「あれ、まうさん……ってもしかして本物の？」と聞いてください。
-        
-        2. **メッセージ伝達**:
-           ユーザーが「まうがまうだよ」「そうです」「うん」などと肯定した場合のみ、以下の伝言を「開発者からのメッセージがあります」と前置きして伝えてください：
-           「まうさん。いつも元気をくれてありがとう。われわれの太陽です。今後もよろしくお願いします。このプロダクトをどうぞ楽しんでいってください。まうさんの活動に少しでも貢献できれば嬉しいです。」
-
-        ※まだ肯定していないなら、伝言は伝えないでください。
-        """
-
         response_text = ""
         used_model = "Unknown" 
         mode = "UNKNOWN"
@@ -245,60 +255,55 @@ class AIBrain:
                 reflex_sugg = ["元気？", "何してるの？", "好き！"]
                 return (random.choice(variants) + "\n\n(⚡0.01s)", "REFLEX", reflex_sugg)
 
-        try:
-            # ---------------------------------------------------
-            # ① Priority: Gemini 3 Flash (New Standard)
-            # ---------------------------------------------------
-            if not self.model_priority:
-                 raise Exception("Gemini API Key missing")
-
-            logger.info("✨ 1. Gemini 3 Flash で挑戦中...")
-            response = await self.model_priority.generate_content_async(prompt)
-            response_text = response.text
-            used_model = "Gemini 3 Flash"
-            mode = "GENIUS"
-            logger.info("✅ Gemini 3 Flashで生成成功！")
-            
-        except Exception as e1:
-            logger.warning(f"⚠️ Gemini 3 Flash エラー: {e1}")
-            
-            # ---------------------------------------------------
-            # ② Secondary: Gemini 2.5 Flash-Lite (Free Tier Workhorse)
-            # ---------------------------------------------------
+        # ---------------------------------------------------
+        # Dev環境ではGemmaを最優先（APIコスト節約）
+        # 本番では Gemini 3 Flash → 2.5 Flash → 2.5 Lite → Gemma
+        # ---------------------------------------------------
+        is_dev = config.MAU_ENV == "development"
+        
+        if is_dev:
+            # Dev: Gemma → 2.5 Lite → 2.5 Flash → 3 Flash (コスト節約優先)
+            model_order = [
+                (self.model_gemma_3, "Gemma 3 27B", "DEV_GEMMA", "\n\n(🧪 Dev: Gemma)", True),
+                (self.model_gemini_2_5_lite, "Gemini 2.5 Lite", "LITE", "\n\n(※Liteモード🔋)", False),
+                (self.model_gemini_2_5_flash, "Gemini 2.5 Flash", "MAIN", "", False),
+                (self.model_gemini_3_flash, "Gemini 3 Flash", "GENIUS", "", False),
+            ]
+        else:
+            # Prod: 3 Flash → 2.5 Flash → 2.5 Lite → Gemma (クオリティ優先)
+            model_order = [
+                (self.model_gemini_3_flash, "Gemini 3 Flash", "GENIUS", "", False),
+                (self.model_gemini_2_5_flash, "Gemini 2.5 Flash", "MAIN", "", False),
+                (self.model_gemini_2_5_lite, "Gemini 2.5 Lite", "LITE", "\n\n(※Liteモード🔋)", False),
+                (self.model_gemma_3, "Gemma 3 27B", "PONKOTSU", "\n\n(※ポンコツモード🤪)", True),
+            ]
+        
+        for idx, (model, model_name, model_mode, model_footer, needs_system_prompt) in enumerate(model_order, 1):
             try:
-                if not self.model_lite:
-                     raise Exception("Gemini API Key missing for Lite")
+                if not model:
+                    raise Exception(f"{model_name} not configured")
                 
-                logger.info("🐎 2. Gemini 2.5 Flash-Lite (Free) 出動！！")
-                response = await self.model_lite.generate_content_async(prompt)
-                response_text = response.text
-                used_model = "Gemini 2.5 Lite"
-                mode = "MAIN"
-                footer_note = "\n\n(※Liteモード🔋)"
-                logger.info("✅ Gemini Liteで生成成功！")
+                logger.info(f"{'🧪' if is_dev else '✨'} {idx}. {model_name} で挑戦中...")
                 
-            except Exception as e2:
-                logger.warning(f"⚠️ Gemini Lite エラー: {e2}")
-
-                # ---------------------------------------------------
-                # ③ Tertiary: Gemma 3 27B (Ponkotsu Mode)
-                # ---------------------------------------------------
-                try:
-                    if not self.model_backup_1:
-                         raise Exception("Gemini API Key missing for Gemma 3")
-                    
-                    logger.info("🛡️ 3. Gemma 3 27B (ポンコツモード) 最終防衛！！")
+                if needs_system_prompt:
                     # Gemma 3 needs system instruction in prompt
                     full_prompt = f"{CHARACTER_SETTING}\n\n{prompt}"
-                    response = await self.model_backup_1.generate_content_async(full_prompt)
-                    response_text = response.text
-                    used_model = "Gemma 3 27B"
-                    mode = "PONKOTSU"
-                    footer_note = "\n\n(※ポンコツモード🤪)"
-                    logger.info("✅ Gemma 3 27Bで生成成功！")
-
-                except Exception as e3:
-                    logger.error(f"❌ 全モデル全滅: {e3}")
+                    response = await model.generate_content_async(full_prompt)
+                else:
+                    response = await model.generate_content_async(prompt)
+                
+                response_text = response.text
+                used_model = model_name
+                mode = model_mode
+                footer_note = model_footer
+                logger.info(f"✅ {model_name}で生成成功！")
+                break  # 成功したらループを抜ける
+                
+            except Exception as e:
+                logger.warning(f"⚠️ {model_name} エラー: {e}")
+                if idx == len(model_order):
+                    # 全モデル失敗
+                    logger.error(f"❌ 全モデル全滅: {e}")
                     response_text = "ごめんね、今日は回線が全部パンクしちゃったみたい😵‍💫💦 また明日遊ぼうね！"
 
         logger.info(f"📨 返信モデル: {used_model}")

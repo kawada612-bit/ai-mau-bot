@@ -81,10 +81,20 @@ CREATE TABLE schedules (
             # Markdownのコードブロック記号を削除
             sql_query = sql_query.replace("```sql", "").replace("```", "").strip()
 
-            # 簡易セキュリティ: SELECT以外は禁止
-            if not sql_query.upper().startswith("SELECT"):
-                logger.warning(f"Blocked non-SELECT query: {sql_query}")
-                return "エラー: 安全のため、SELECTクエリ以外は実行できません。"
+            # AIの応答からSELECT文を抽出（前後にテキストがあっても対応）
+            sql_query_upper = sql_query.upper()
+            select_pos = sql_query_upper.find("SELECT")
+            if select_pos != -1:
+                sql_query = sql_query[select_pos:]
+                logger.info(f"📝 Extracted SQL from position {select_pos}")
+
+            # セキュリティ: 更新系クエリを禁止（INSERT/UPDATE/DELETE/DROP/TRUNCATE/ALTER/CREATE）
+            dangerous_keywords = ["INSERT", "UPDATE", "DELETE", "DROP", "TRUNCATE", "ALTER", "CREATE"]
+            sql_query_upper = sql_query.upper()
+            for keyword in dangerous_keywords:
+                if keyword in sql_query_upper:
+                    logger.warning(f"Blocked dangerous query containing '{keyword}': {sql_query}")
+                    return f"エラー: 安全のため、{keyword}を含むクエリは実行できません。"
 
             logger.info(f"🔍 Executing SQL: {sql_query}")
             result_df = pd.read_sql_query(sql_query, conn)
