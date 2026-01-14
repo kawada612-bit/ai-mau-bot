@@ -19,10 +19,16 @@ class AIBrain:
         if config.GEMINI_API_KEY:
             genai.configure(api_key=config.GEMINI_API_KEY)
 
-            # ① Priority Model (Gemini 3 Flash - New!)
+            # ① Priority Model (Gemini 2.0 Flash Exp for Search)
+            # Use explicit Tool construction to ensure google_search is recognized
+            search_tool = genai.protos.Tool(
+                google_search={}
+            )
+            
             self.model_priority = genai.GenerativeModel(
-                model_name='gemini-3-flash-preview',
-                system_instruction=CHARACTER_SETTING
+                model_name='gemini-2.0-flash-exp', 
+                system_instruction=CHARACTER_SETTING,
+                tools=[search_tool]
             )
 
             # ② Secondary Model (Gemini 2.5 Flash-Lite - Free Tier Workhorse)
@@ -44,6 +50,7 @@ class AIBrain:
     async def generate_sql(self, user_question: str, schema_info: str) -> str:
         """
         Generates a SQL query (SELECT only) based on the user's question and table schema.
+        Includes fallback logic to Lite model if priority model fails (e.g. Quota Exceeded).
         """
         if not self.model_priority:
              return "SELECT * FROM schedules LIMIT 0;" # Fallback
@@ -108,15 +115,28 @@ class AIBrain:
         
         """
         
-
-
-        # Fallback to Gemini
+        # 1. Try Priority Model
         try:
+            logger.info("SEARCH/SQL: Trying Priority Model...")
+            # For SQL generation, we don't necessarily need search tools, but model_config allows it if defaults are set.
+            # To be safe and avoid overhead, we can disable tools if possible, but the SDK might not support per-request disable easily with this setup.
+            # We'll just call it.
             response = await self.model_priority.generate_content_async(prompt)
             return response.text.strip()
         except Exception as e:
-            logger.error(f"SQL Gen Error: {e}")
-            return "SELECT * FROM schedules LIMIT 0;"
+            logger.warning(f"⚠️ SQL Gen (Priority) Failed: {e}. Switching to Lite...")
+
+            # 2. Fallback to Lite Model
+            try:
+                if not self.model_lite:
+                    raise Exception("Lite model not configured")
+                
+                response = await self.model_lite.generate_content_async(prompt)
+                return response.text.strip()
+
+            except Exception as e2:
+                logger.error(f"❌ SQL Gen All Models Failed: {e2}")
+                return "SELECT * FROM schedules LIMIT 0;"
 
     async def generate_response(self, user_name: str, conversation_log: str, context_info: str = None, timezone: str = "Asia/Tokyo") -> tuple[str, str, list[str]]:
         """
@@ -126,9 +146,18 @@ class AIBrain:
         # Determine language based on Region (Timezone)
         is_global_user = timezone != "Asia/Tokyo"
 
+        # 現在時刻を取得してプロンプトに含める
+        from datetime import datetime
+        current_now = datetime.now()
+        current_time_str = current_now.strftime('%Y年%m月%d日 %H時%M分')
+
         prompt = f"""
         あなたはアイドルの「AIまう」です。
         現在、ファンの「{user_name}」さんからメッセージが届きました。
+
+        【現在時刻】
+        {current_time_str}
+        ※日付を参照するときは必ずこの現在時刻を基準にしてください。「来年」「来月」「今週」などの相対表現は正確に使ってください。
 
         【会話履歴】
         {conversation_log}
