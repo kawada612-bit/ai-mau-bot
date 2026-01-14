@@ -11,6 +11,8 @@ import httpx
 import os
 import json
 import time
+import threading
+from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime
 
 from src.app import bot
@@ -47,6 +49,25 @@ class OGPResponse(BaseModel):
 # Global variables to hold tasks
 bot_task = None
 self_ping_task = None
+
+# Schedule sync - concurrency control
+_sync_in_progress = False
+_sync_lock = threading.Lock()
+_sync_executor = ThreadPoolExecutor(max_workers=1)
+
+def _run_sync_with_safeguards():
+    """Execute schedule sync with error handling"""
+    global _sync_in_progress
+    try:
+        from src.workers.scheduler import fetch_and_sync
+        logger.info("🔄 Starting schedule sync...")
+        fetch_and_sync(dry_run=False)
+        logger.info("✅ Schedule sync completed successfully")
+    except Exception as e:
+        logger.error(f"❌ Schedule sync failed: {e}")
+    finally:
+        with _sync_lock:
+            _sync_in_progress = False
 
 async def self_ping():
     """自己Ping機能: 15分ごとに自分自身にアクセスしてスリープを防ぐ"""
@@ -248,3 +269,24 @@ async def ogp_endpoint(req: OGPRequest):
             description='',
             image=''
         )
+
+@app.get("/api/sync-schedule")
+async def sync_schedule_endpoint(token: str = ""):
+    """Trigger schedule sync (for UptimeRobot scheduled calls)"""
+    global _sync_in_progress
+    
+    # Token authentication
+    if token != config.SYNC_SECRET_TOKEN:
+        raise HTTPException(status_code=401, detail="Unauthorized")
+    
+    # Check if sync is already in progress
+    with _sync_lock:
+        if _sync_in_progress:
+            return {"status": "skipped", "message": "Sync already in progress"}
+        _sync_in_progress = True
+    
+    # Execute in background with ThreadPoolExecutor
+    _sync_executor.submit(_run_sync_with_safeguards)
+    
+    return {"status": "started", "message": "Schedule sync started in background"}
+
