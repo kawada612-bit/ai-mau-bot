@@ -47,7 +47,6 @@ graph LR
         Gemini3Flash("Google AI Studio<br>Gemini 3 Flash Preview"):::ai
         Gemini25Flash("Google AI Studio<br>Gemini 2.5 Flash"):::ai
         GeminiLite("Google AI Studio<br>Gemini 2.5 Flash Lite"):::ai
-        Gemini20Exp("Google AI Studio<br>Gemini 2.0 Flash Exp"):::ai
         Gemma3("Google AI Studio<br>Gemma 3 27B"):::ai
     end
 
@@ -79,8 +78,7 @@ graph LR
         FastAPI -->|"① 会話要求"| Gemini3Flash
         Gemini3Flash -.->|"② エラー/制限時"| Gemini25Flash
         Gemini25Flash -.->|"③ エラー/制限時"| GeminiLite
-        GeminiLite -.->|"④ エラー/制限時"| Gemini20Exp
-        Gemini20Exp -.->|"⑤ エラー/制限時"| Gemma3
+        GeminiLite -.->|"④ エラー/制限時"| Gemma3
     end
 
     %% 2. データ分析ロジック
@@ -213,7 +211,6 @@ WebチャットではURLを含むメッセージに対して、以下の機能�
 | **Google AI Studio** | Gemini 3 Flash Preview | Free   |
 | **Google AI Studio** | Gemini 2.5 Flash       | Free   |
 | **Google AI Studio** | Gemini 2.5 Flash Lite  | Free   |
-| **Google AI Studio** | Gemini 2.0 Flash Exp   | Free   |
 | **Google AI Studio** | Gemma 3 27B            | Free   |
 
 ## 5. データベース設計 (Supabase)

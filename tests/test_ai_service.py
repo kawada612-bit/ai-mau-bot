@@ -430,26 +430,6 @@ async def test_live_gemini_2_5_lite():
 
 @pytest.mark.live
 @pytest.mark.asyncio
-async def test_live_gemini_2_0_flash_exp():
-    """Live API test for Gemini 2.0 Flash Exp (Search Support)"""
-    import google.generativeai as genai
-    from src.core import config
-    
-    if not config.GEMINI_API_KEY:
-        pytest.skip("GEMINI_API_KEY not set")
-    
-    genai.configure(api_key=config.GEMINI_API_KEY)
-    model = genai.GenerativeModel(model_name='gemini-2.0-flash-exp')
-    
-    response = await model.generate_content_async("Say 'OK' if you can hear me.")
-    
-    assert response.text is not None
-    assert len(response.text) > 0
-    print(f"✅ Gemini 2.0 Flash Exp: {response.text[:50]}...")
-
-
-@pytest.mark.live
-@pytest.mark.asyncio
 async def test_live_gemma_3():
     """Live API test for Gemma 3 27B (Backup Model)"""
     import google.generativeai as genai

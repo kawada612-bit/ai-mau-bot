@@ -32,9 +32,8 @@ API制限やサーバーダウン時でも会話を継続できる、極めて�
     1. Google Gemini 3 Flash Preview (最新・最高性能)
     2. Google Gemini 2.5 Flash (高性能)
     3. Google Gemini 2.5 Flash Lite (Free Tier)
-    4. Google Gemini 2.0 Flash Exp (Search連携)
-    5. Google Gemma 3 27B (バックアップ)
-* **開発環境:** Gemma 3 → 2.5 Lite → 2.5 Flash → 3 Flash → 2.0 Flash Exp (コスト節約優先)
+    4. Google Gemma 3 27B (バックアップ)
+* **開発環境:** Gemma 3 → 2.5 Lite → 2.5 Flash → 3 Flash (コスト節約優先)
 * **データベース:** Supabase (PostgreSQL)
 * **スケジューラー:** TimeTree連携による自動データ同期
 

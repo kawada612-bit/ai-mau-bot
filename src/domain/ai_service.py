@@ -11,11 +11,10 @@ logger = setup_logger(__name__)
 
 class AIBrain:
     def __init__(self) -> None:
-        # Configure Gemini
+        # Configure Gemini (4モデル体制)
         self.model_gemini_3_flash = None      # 最新・最高性能
         self.model_gemini_2_5_flash = None    # 高性能
         self.model_gemini_2_5_lite = None     # Free Tier
-        self.model_gemini_2_0_flash_exp = None # Search連携
         self.model_gemma_3 = None             # バックアップ
         
         if config.GEMINI_API_KEY:
@@ -39,15 +38,7 @@ class AIBrain:
                 system_instruction=CHARACTER_SETTING
             )
 
-            # ④ Gemini 2.0 Flash Exp (Search Tool Support)
-            search_tool = genai.protos.Tool(google_search={})
-            self.model_gemini_2_0_flash_exp = genai.GenerativeModel(
-                model_name='gemini-2.0-flash-exp', 
-                system_instruction=CHARACTER_SETTING,
-                tools=[search_tool]
-            )
-
-            # ⑤ Gemma 3 27B (Backup - No system_instruction support)
+            # ④ Gemma 3 27B (Backup - No system_instruction support)
             self.model_gemma_3 = genai.GenerativeModel(
                 model_name='gemma-3-27b-it'
             )
@@ -266,26 +257,24 @@ class AIBrain:
 
         # ---------------------------------------------------
         # Dev環境ではGemmaを最優先（APIコスト節約）
-        # 本番では Gemini 3 Flash → 2.5 Flash → 2.5 Lite → 2.0 Flash Exp → Gemma
+        # 本番では Gemini 3 Flash → 2.5 Flash → 2.5 Lite → Gemma
         # ---------------------------------------------------
         is_dev = config.MAU_ENV == "development"
         
         if is_dev:
-            # Dev: Gemma → 2.5 Lite → 2.5 Flash → 3 Flash → 2.0 Flash Exp (コスト節約優先)
+            # Dev: Gemma → 2.5 Lite → 2.5 Flash → 3 Flash (コスト節約優先)
             model_order = [
                 (self.model_gemma_3, "Gemma 3 27B", "DEV_GEMMA", "\n\n(🧪 Dev: Gemma)", True),
                 (self.model_gemini_2_5_lite, "Gemini 2.5 Lite", "LITE", "\n\n(※Liteモード🔋)", False),
                 (self.model_gemini_2_5_flash, "Gemini 2.5 Flash", "MAIN", "", False),
                 (self.model_gemini_3_flash, "Gemini 3 Flash", "GENIUS", "", False),
-                (self.model_gemini_2_0_flash_exp, "Gemini 2.0 Flash Exp", "SEARCH", "", False),
             ]
         else:
-            # Prod: 3 Flash → 2.5 Flash → 2.5 Lite → 2.0 Flash Exp → Gemma (クオリティ優先)
+            # Prod: 3 Flash → 2.5 Flash → 2.5 Lite → Gemma (クオリティ優先)
             model_order = [
                 (self.model_gemini_3_flash, "Gemini 3 Flash", "GENIUS", "", False),
                 (self.model_gemini_2_5_flash, "Gemini 2.5 Flash", "MAIN", "", False),
                 (self.model_gemini_2_5_lite, "Gemini 2.5 Lite", "LITE", "\n\n(※Liteモード🔋)", False),
-                (self.model_gemini_2_0_flash_exp, "Gemini 2.0 Flash Exp", "SEARCH", "", False),
                 (self.model_gemma_3, "Gemma 3 27B", "PONKOTSU", "\n\n(※ポンコツモード🤪)", True),
             ]
         
