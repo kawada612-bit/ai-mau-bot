@@ -12,35 +12,44 @@ logger = setup_logger(__name__)
 class AIBrain:
     def __init__(self) -> None:
         # Configure Gemini
-        self.model_priority = None
-        self.model_lite = None
-        self.model_backup_1 = None
+        self.model_gemini_3_flash = None      # 最新・最高性能
+        self.model_gemini_2_5_flash = None    # 高性能
+        self.model_gemini_2_5_lite = None     # Free Tier
+        self.model_gemini_2_0_flash_exp = None # Search連携
+        self.model_gemma_3 = None             # バックアップ
         
         if config.GEMINI_API_KEY:
             genai.configure(api_key=config.GEMINI_API_KEY)
 
-            # ① Priority Model (Gemini 2.0 Flash Exp for Search)
-            # Use explicit Tool construction to ensure google_search is recognized
-            search_tool = genai.protos.Tool(
-                google_search={}
+            # ① Gemini 3 Flash Preview (Latest & Greatest)
+            self.model_gemini_3_flash = genai.GenerativeModel(
+                model_name='gemini-3-flash-preview',
+                system_instruction=CHARACTER_SETTING
             )
-            
-            self.model_priority = genai.GenerativeModel(
+
+            # ② Gemini 2.5 Flash (High Performance)
+            self.model_gemini_2_5_flash = genai.GenerativeModel(
+                model_name='gemini-2.5-flash',
+                system_instruction=CHARACTER_SETTING
+            )
+
+            # ③ Gemini 2.5 Flash-Lite (Free Tier Workhorse)
+            self.model_gemini_2_5_lite = genai.GenerativeModel(
+                model_name='gemini-2.5-flash-lite',
+                system_instruction=CHARACTER_SETTING
+            )
+
+            # ④ Gemini 2.0 Flash Exp (Search Tool Support)
+            search_tool = genai.protos.Tool(google_search={})
+            self.model_gemini_2_0_flash_exp = genai.GenerativeModel(
                 model_name='gemini-2.0-flash-exp', 
                 system_instruction=CHARACTER_SETTING,
                 tools=[search_tool]
             )
 
-            # ② Secondary Model (Gemini 2.5 Flash-Lite - Free Tier Workhorse)
-            self.model_lite = genai.GenerativeModel(
-                model_name='gemini-2.5-flash-lite', # Assuming actual name is needed, or just gemini-2.5-flash-lite
-                system_instruction=CHARACTER_SETTING
-            )
-
-            # ③ Backup Model (Gemma 3 (27B) - Sub/Cheap)
-            self.model_backup_1 = genai.GenerativeModel(
+            # ⑤ Gemma 3 27B (Backup - No system_instruction support)
+            self.model_gemma_3 = genai.GenerativeModel(
                 model_name='gemma-3-27b-it'
-                # Gemma 3 doesn't support system_instruction via API yet
             )
         else:
             logger.warning("GEMINI_API_KEY が設定されていません。Geminiモデルは機能しません。")
@@ -115,28 +124,27 @@ class AIBrain:
         
         """
         
-        # 1. Try Priority Model
-        try:
-            logger.info("SEARCH/SQL: Trying Priority Model...")
-            # For SQL generation, we don't necessarily need search tools, but model_config allows it if defaults are set.
-            # To be safe and avoid overhead, we can disable tools if possible, but the SDK might not support per-request disable easily with this setup.
-            # We'll just call it.
-            response = await self.model_priority.generate_content_async(prompt)
-            return response.text.strip()
-        except Exception as e:
-            logger.warning(f"⚠️ SQL Gen (Priority) Failed: {e}. Switching to Lite...")
-
-            # 2. Fallback to Lite Model
+        # SQL生成用モデルリスト (Gemini 3 Flash → 2.5 Flash → 2.5 Lite)
+        sql_models = [
+            (self.model_gemini_3_flash, "Gemini 3 Flash"),
+            (self.model_gemini_2_5_flash, "Gemini 2.5 Flash"),
+            (self.model_gemini_2_5_lite, "Gemini 2.5 Lite"),
+        ]
+        
+        for model, model_name in sql_models:
             try:
-                if not self.model_lite:
-                    raise Exception("Lite model not configured")
+                if not model:
+                    raise Exception(f"{model_name} not configured")
                 
-                response = await self.model_lite.generate_content_async(prompt)
+                logger.info(f"SEARCH/SQL: Trying {model_name}...")
+                response = await model.generate_content_async(prompt)
                 return response.text.strip()
-
-            except Exception as e2:
-                logger.error(f"❌ SQL Gen All Models Failed: {e2}")
-                return "SELECT * FROM schedules LIMIT 0;"
+            except Exception as e:
+                logger.warning(f"⚠️ SQL Gen ({model_name}) Failed: {e}")
+                continue
+        
+        logger.error("❌ SQL Gen All Models Failed")
+        return "SELECT * FROM schedules LIMIT 0;"
 
     async def generate_response(self, user_name: str, conversation_log: str, context_info: str = None, timezone: str = "Asia/Tokyo") -> tuple[str, str, list[str]]:
         """
@@ -256,60 +264,57 @@ class AIBrain:
                 reflex_sugg = ["元気？", "何してるの？", "好き！"]
                 return (random.choice(variants) + "\n\n(⚡0.01s)", "REFLEX", reflex_sugg)
 
-        try:
-            # ---------------------------------------------------
-            # ① Priority: Gemini 3 Flash (New Standard)
-            # ---------------------------------------------------
-            if not self.model_priority:
-                 raise Exception("Gemini API Key missing")
-
-            logger.info("✨ 1. Gemini 3 Flash で挑戦中...")
-            response = await self.model_priority.generate_content_async(prompt)
-            response_text = response.text
-            used_model = "Gemini 3 Flash"
-            mode = "GENIUS"
-            logger.info("✅ Gemini 3 Flashで生成成功！")
-            
-        except Exception as e1:
-            logger.warning(f"⚠️ Gemini 3 Flash エラー: {e1}")
-            
-            # ---------------------------------------------------
-            # ② Secondary: Gemini 2.5 Flash-Lite (Free Tier Workhorse)
-            # ---------------------------------------------------
+        # ---------------------------------------------------
+        # Dev環境ではGemmaを最優先（APIコスト節約）
+        # 本番では Gemini 3 Flash → 2.5 Flash → 2.5 Lite → 2.0 Flash Exp → Gemma
+        # ---------------------------------------------------
+        is_dev = config.MAU_ENV == "development"
+        
+        if is_dev:
+            # Dev: Gemma → 2.5 Lite → 2.5 Flash → 3 Flash → 2.0 Flash Exp (コスト節約優先)
+            model_order = [
+                (self.model_gemma_3, "Gemma 3 27B", "DEV_GEMMA", "\n\n(🧪 Dev: Gemma)", True),
+                (self.model_gemini_2_5_lite, "Gemini 2.5 Lite", "LITE", "\n\n(※Liteモード🔋)", False),
+                (self.model_gemini_2_5_flash, "Gemini 2.5 Flash", "MAIN", "", False),
+                (self.model_gemini_3_flash, "Gemini 3 Flash", "GENIUS", "", False),
+                (self.model_gemini_2_0_flash_exp, "Gemini 2.0 Flash Exp", "SEARCH", "", False),
+            ]
+        else:
+            # Prod: 3 Flash → 2.5 Flash → 2.5 Lite → 2.0 Flash Exp → Gemma (クオリティ優先)
+            model_order = [
+                (self.model_gemini_3_flash, "Gemini 3 Flash", "GENIUS", "", False),
+                (self.model_gemini_2_5_flash, "Gemini 2.5 Flash", "MAIN", "", False),
+                (self.model_gemini_2_5_lite, "Gemini 2.5 Lite", "LITE", "\n\n(※Liteモード🔋)", False),
+                (self.model_gemini_2_0_flash_exp, "Gemini 2.0 Flash Exp", "SEARCH", "", False),
+                (self.model_gemma_3, "Gemma 3 27B", "PONKOTSU", "\n\n(※ポンコツモード🤪)", True),
+            ]
+        
+        for idx, (model, model_name, model_mode, model_footer, needs_system_prompt) in enumerate(model_order, 1):
             try:
-                if not self.model_lite:
-                     raise Exception("Gemini API Key missing for Lite")
+                if not model:
+                    raise Exception(f"{model_name} not configured")
                 
-                logger.info("🐎 2. Gemini 2.5 Flash-Lite (Free) 出動！！")
-                response = await self.model_lite.generate_content_async(prompt)
-                response_text = response.text
-                used_model = "Gemini 2.5 Lite"
-                mode = "MAIN"
-                footer_note = "\n\n(※Liteモード🔋)"
-                logger.info("✅ Gemini Liteで生成成功！")
+                logger.info(f"{'🧪' if is_dev else '✨'} {idx}. {model_name} で挑戦中...")
                 
-            except Exception as e2:
-                logger.warning(f"⚠️ Gemini Lite エラー: {e2}")
-
-                # ---------------------------------------------------
-                # ③ Tertiary: Gemma 3 27B (Ponkotsu Mode)
-                # ---------------------------------------------------
-                try:
-                    if not self.model_backup_1:
-                         raise Exception("Gemini API Key missing for Gemma 3")
-                    
-                    logger.info("🛡️ 3. Gemma 3 27B (ポンコツモード) 最終防衛！！")
+                if needs_system_prompt:
                     # Gemma 3 needs system instruction in prompt
                     full_prompt = f"{CHARACTER_SETTING}\n\n{prompt}"
-                    response = await self.model_backup_1.generate_content_async(full_prompt)
-                    response_text = response.text
-                    used_model = "Gemma 3 27B"
-                    mode = "PONKOTSU"
-                    footer_note = "\n\n(※ポンコツモード🤪)"
-                    logger.info("✅ Gemma 3 27Bで生成成功！")
-
-                except Exception as e3:
-                    logger.error(f"❌ 全モデル全滅: {e3}")
+                    response = await model.generate_content_async(full_prompt)
+                else:
+                    response = await model.generate_content_async(prompt)
+                
+                response_text = response.text
+                used_model = model_name
+                mode = model_mode
+                footer_note = model_footer
+                logger.info(f"✅ {model_name}で生成成功！")
+                break  # 成功したらループを抜ける
+                
+            except Exception as e:
+                logger.warning(f"⚠️ {model_name} エラー: {e}")
+                if idx == len(model_order):
+                    # 全モデル失敗
+                    logger.error(f"❌ 全モデル全滅: {e}")
                     response_text = "ごめんね、今日は回線が全部パンクしちゃったみたい😵‍💫💦 また明日遊ぼうね！"
 
         logger.info(f"📨 返信モデル: {used_model}")
