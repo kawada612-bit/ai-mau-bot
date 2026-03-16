@@ -106,7 +106,7 @@ def fetch_and_sync(dry_run: bool = False) -> None:
 
         page.on("response", handle_response)
 
-        # 今月から向こう4ヶ月分をシンプルに巡回
+        # 今月から向こう4ヶ月分を巡回
         today = datetime.now()
         for i in range(4):
             target_date = today + relativedelta(months=i)
@@ -126,6 +126,18 @@ def fetch_and_sync(dry_run: bool = False) -> None:
         logger.warning("❌ データが見つかりませんでした。")
         return
 
+    # 既存データの更新日時を取得して、変更がないものはスキップするようにする
+    existing_updates = {}
+    supabase = None
+    if config.SUPABASE_URL and config.SUPABASE_KEY:
+        try:
+            supabase = create_client(config.SUPABASE_URL, config.SUPABASE_KEY)
+            # 全件取得してIDと更新日時をマッピング
+            response = supabase.table("schedules").select("source_id, updated_at").execute()
+            existing_updates = {item["source_id"]: item["updated_at"] for item in response.data}
+        except Exception as e:
+            logger.warning(f"⚠️ 既存データの取得失敗 (初回実行時は正常): {e}")
+
     # データ整形と保存
     upsert_data = []
     events_list = list(all_events.values())
@@ -144,8 +156,25 @@ def fetch_and_sync(dry_run: bool = False) -> None:
                 updated_at_dt = datetime.fromtimestamp(raw_updated_at / 1000, timezone.utc)
             else:
                 updated_at_dt = datetime.now(timezone.utc)
-
+            
+            updated_at_iso = updated_at_dt.isoformat()
             dt_obj = datetime.fromtimestamp(raw_start, timezone(timedelta(hours=9)))
+
+            # 変更チェック: すでにDBにあり、更新日時が変わっていなければ解析をスキップ
+            if source_id in existing_updates:
+                try:
+                    db_updated_at = existing_updates[source_id]
+                    # Supabaseの日時は '2026-03-06T14:06:02.365+00' のような形式
+                    # Pythonのisoformatは '2026-03-06T14:06:02.365000+00:00'
+                    # 両方を datetime オブジェクトにして比較
+                    dt1 = datetime.fromisoformat(db_updated_at.replace('Z', '+00:00'))
+                    dt2 = datetime.fromisoformat(updated_at_iso)
+                    
+                    if dt1 == dt2:
+                        logger.info(f"  ⏭️  スキップ (変更なし): {title[:15]}...")
+                        continue
+                except Exception as e:
+                    logger.debug(f"比較エラー: {e}")
             start_at = dt_obj.isoformat()
             end_at = None
             is_all_day = event.get("all_day", False)
@@ -211,12 +240,11 @@ def fetch_and_sync(dry_run: bool = False) -> None:
             logger.info(json.dumps(upsert_data, indent=2, default=str))
         else:
             try:
-                if config.SUPABASE_URL and config.SUPABASE_KEY:
-                    supabase = create_client(config.SUPABASE_URL, config.SUPABASE_KEY)
+                if supabase:
                     supabase.table("schedules").upsert(upsert_data, on_conflict="source_id").execute()
-                    logger.info(f"✅ 同期完了！ {len(upsert_data)} 件を保存しました。")
+                    logger.info(f"✅ 同期完了！ {len(upsert_data)} 件を新規保存または更新しました。")
                 else:
-                    logger.error("Supabase config failed")
+                    logger.error("Supabase client is not initialized")
             except Exception as e:
                 logger.error(f"❌ DB保存エラー: {e}")
     else:

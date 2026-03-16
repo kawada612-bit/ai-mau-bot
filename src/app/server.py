@@ -1,4 +1,5 @@
 
+from typing import Optional
 from contextlib import asynccontextmanager
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
@@ -14,6 +15,7 @@ import time
 import threading
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime
+from supabase import create_client
 
 from src.app import bot
 from src.core import config
@@ -270,7 +272,7 @@ async def ogp_endpoint(req: OGPRequest):
             image=''
         )
 
-@app.get("/api/sync-schedule")
+@app.api_route("/api/sync-schedule", methods=["GET", "HEAD"])
 async def sync_schedule_endpoint(token: str = ""):
     """Trigger schedule sync (for UptimeRobot scheduled calls)"""
     global _sync_in_progress
@@ -290,3 +292,47 @@ async def sync_schedule_endpoint(token: str = ""):
     
     return {"status": "started", "message": "Schedule sync started in background"}
 
+@app.get("/api/schedules")
+async def get_schedules(since: Optional[str] = None, until: Optional[str] = None):
+    """
+    Get schedules from Supabase for Gemini Gems.
+    - since: YYYYMMDD (optional, defaults to today)
+    - until: YYYYMMDD (optional)
+    """
+    try:
+        supabase = create_client(config.SUPABASE_URL, config.SUPABASE_KEY)
+        query = supabase.table("schedules").select("*")
+        
+        # Parse 'since', default to today
+        if since:
+            try:
+                parsed_since = datetime.strptime(since, "%Y%m%d")
+                since_iso = parsed_since.strftime("%Y-%m-%dT00:00:00")
+            except ValueError:
+                raise HTTPException(status_code=400, detail="Invalid 'since' format. Use YYYYMMDD.")
+        else:
+            # Fallback to today
+            today = datetime.now()
+            since_iso = today.strftime("%Y-%m-%dT00:00:00")
+            
+        # Add gte condition
+        query = query.gte("start_at", since_iso)
+        
+        # Parse 'until' if provided
+        if until:
+            try:
+                parsed_until = datetime.strptime(until, "%Y%m%d")
+                # Include the whole day of 'until'
+                until_iso = parsed_until.strftime("%Y-%m-%dT23:59:59")
+                query = query.lte("start_at", until_iso)
+            except ValueError:
+                raise HTTPException(status_code=400, detail="Invalid 'until' format. Use YYYYMMDD.")
+                
+        # Execute query
+        response = query.order("start_at").execute()
+        return response.data
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"❌ /api/schedules Error: {e}")
+        raise HTTPException(status_code=500, detail="Internal Server Error")
