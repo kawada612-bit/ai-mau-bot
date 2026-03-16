@@ -1,0 +1,95 @@
+openapi: 3.1.0
+info:
+  title: AI Mau Schedules API
+  description: AIまうちゃんのスケジュール情報を取得する外部公開用API。Gemini Gemsからの参照に使用します。
+  version: "1.0.0"
+servers:
+  - url: https://{YOUR_RENDER_APP_URL}
+    description: 稼働中のサーバーURL (Render等の本番URLに置き換えてください)
+paths:
+  /api/schedules:
+    get:
+      summary: スケジュール一覧の取得
+      description: 予定されている直近のスケジュール（ライブ、イベント等）の一覧をJSON形式で取得します。日付範囲でフィルタ可能です。
+      operationId: getSchedules
+      parameters:
+        - name: since
+          in: query
+          description: 検索開始日（YYYYMMDD形式、例：20260316）。省略された場合は「今日以降」のスケジュールがデフォルトで取得されます。
+          required: false
+          schema:
+            type: string
+            pattern: '^\d{8}$'
+        - name: until
+          in: query
+          description: 検索終了日（YYYYMMDD形式、例：20261231）。指定された日の終日（23:59:59）までが検索対象となります。
+          required: false
+          schema:
+            type: string
+            pattern: '^\d{8}$'
+      responses:
+        "200":
+          description: 条件に合致するスケジュールの配列
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    source_id:
+                      type: string
+                      description: 予約システム等の元ID
+                    title:
+                      type: string
+                      description: イベント・ライブのタイトル
+                    start_at:
+                      type: string
+                      format: date-time
+                      description: 開始日時 (ISO8601)
+                    end_at:
+                      type: string
+                      format: date-time
+                      nullable: true
+                      description: 終了日時 (ISO8601)
+                    place:
+                      type: string
+                      nullable: true
+                      description: 開催場所
+                    description:
+                      type: string
+                      nullable: true
+                      description: イベント詳細・説明
+                    url:
+                      type: string
+                      nullable: true
+                      description: 詳細URL
+                    ticket_url:
+                      type: string
+                      nullable: true
+                      description: チケット予約URL
+                    bonus:
+                      type: string
+                      nullable: true
+                      description: 予約特典などの情報
+                    status:
+                      type: string
+                      description: 状態 (例: "scheduled")
+                    tags:
+                      type: array
+                      items:
+                        type: string
+                      description: 関連タグ
+                    metadata:
+                      type: object
+                      description: 元データなどの付随情報
+                    created_at:
+                      type: string
+                      format: date-time
+                    updated_at:
+                      type: string
+                      format: date-time
+        "400":
+          description: 日付フォーマット異常
+        "500":
+          description: サーバー内部エラー
