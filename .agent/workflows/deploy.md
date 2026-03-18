@@ -67,7 +67,7 @@ git push origin main
 | **Branch**         | `main`                                 |
 | **Root Directory** | (空欄のまま)                           |
 | **Runtime**        | `Python 3`                             |
-| **Build Command**  | `pip install -r requirements.txt`      |
+| **Build Command**  | `pip install -r requirements.txt && playwright install chromium` |
 | **Start Command**  | `python -m src.app.main`               |
 | **Instance Type**  | `Free`                                 |
 
@@ -83,7 +83,13 @@ SUPABASE_URL=<Supabase データベースURL>
 SUPABASE_KEY=<Supabase APIキー>
 TIMETREE_CALENDAR_ID=<TimeTreeカレンダーID>
 TIMETREE_TOKEN=<TimeTree APIトークン>
+PLAYWRIGHT_BROWSERS_PATH=/opt/render/project/.cache/ms-playwright
 ```
+
+> **重要 (Playwright対応)**: 
+> 1. `PLAYWRIGHT_BROWSERS_PATH` を設定することで、ブラウザがデプロイ間で永続化されます。
+> 2. Build Command に `playwright install chromium` を含める必要があります。
+> 3. RenderのNative Runtimeで依存関係エラーが出る場合は、Dockerランタイムへの切り替えを検討してください。
 
 > **注意**: `ALLOWED_ORIGINS` は後でVercelのURLが確定してから追加します。
 
