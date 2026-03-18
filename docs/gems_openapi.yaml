@@ -4,8 +4,8 @@ info:
   description: AIまうちゃんのスケジュール情報を取得する外部公開用API。Gemini Gemsからの参照に使用します。
   version: "1.0.0"
 servers:
-  - url: https://{YOUR_RENDER_APP_URL}
-    description: 稼働中のサーバーURL (Render等の本番URLに置き換えてください)
+  - url: https://ai-mau-bot.onrender.com
+    description: 稼働中のサーバーURL
 paths:
   /api/schedules:
     get:
