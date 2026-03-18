@@ -1,7 +1,7 @@
 
 from typing import Optional
 from contextlib import asynccontextmanager
-from fastapi import FastAPI, HTTPException, Request
+from fastapi import FastAPI, HTTPException, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 from slowapi import Limiter, _rate_limit_exceeded_handler
@@ -292,13 +292,22 @@ async def sync_schedule_endpoint(token: str = ""):
     
     return {"status": "started", "message": "Schedule sync started in background"}
 
-@app.get("/api/schedules")
-async def get_schedules(since: Optional[str] = None, until: Optional[str] = None):
+@app.api_route("/api/schedules", methods=["GET", "HEAD"])
+@limiter.exempt
+async def get_schedules(response: Response, request: Request, since: Optional[str] = None, until: Optional[str] = None):
     """
     Get schedules from Supabase for Gemini Gems.
     - since: YYYYMMDD (optional, defaults to today)
     - until: YYYYMMDD (optional)
     """
+    # CORS relaxation override for this specific endpoint
+    # Force Access-Control-Allow-Origin to * regardless of config
+    response.headers["Access-Control-Allow-Origin"] = "*"
+    
+    # Support for HEAD requests (Gems health check/reachability)
+    if request.method == "HEAD":
+        return Response(status_code=200, headers=dict(response.headers))
+
     try:
         supabase = create_client(config.SUPABASE_URL, config.SUPABASE_KEY)
         query = supabase.table("schedules").select("*")
